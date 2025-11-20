@@ -1,6 +1,7 @@
 // Fetch and parse OSM changeset replication data
 import { XMLParser } from 'fast-xml-parser';
 import type { Changeset, OsmApiChangeset, ReplicationState } from './types';
+import { retry } from './utils';
 
 const OSM_REPLICATION_BASE_URL = 'https://planet.openstreetmap.org/replication/minute';
 
@@ -45,18 +46,24 @@ export async function fetchChangesets(sequenceNumber: number): Promise<Changeset
   const changesetUrl = `${OSM_REPLICATION_BASE_URL}/${path}.osm.gz`;
   
   try {
-    const response = await fetch(changesetUrl);
-    if (!response.ok) {
-      console.log(`No changeset file found for sequence ${sequenceNumber}`);
-      return [];
-    }
-    
-    // Decompress gzip data
-    const compressedData = await response.arrayBuffer();
-    const decompressedData = await decompressGzip(compressedData);
-    const xmlText = new TextDecoder().decode(decompressedData);
-    
-    return parseChangesetsXml(xmlText);
+    // Use retry logic for network requests
+    return await retry(async () => {
+      const response = await fetch(changesetUrl);
+      if (!response.ok) {
+        if (response.status === 404) {
+          console.log(`No changeset file found for sequence ${sequenceNumber}`);
+          return [];
+        }
+        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+      }
+      
+      // Decompress gzip data
+      const compressedData = await response.arrayBuffer();
+      const decompressedData = await decompressGzip(compressedData);
+      const xmlText = new TextDecoder().decode(decompressedData);
+      
+      return parseChangesetsXml(xmlText);
+    }, 2, 2000); // 2 retries with 2 second initial delay
   } catch (error) {
     console.error('Error fetching changesets:', error);
     return [];

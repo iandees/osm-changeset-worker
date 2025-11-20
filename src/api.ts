@@ -3,6 +3,7 @@ import { Hono } from 'hono';
 import { cors } from 'hono/cors';
 import type { Env, Changeset } from './types';
 import { queryChangesets, getChangesetById } from './database';
+import { validateBbox } from './utils';
 
 const api = new Hono<{ Bindings: Env }>();
 
@@ -54,7 +55,14 @@ api.get('/changesets', async (c) => {
   if (bboxStr) {
     const [minLon, minLat, maxLon, maxLat] = bboxStr.split(',').map(parseFloat);
     if (!isNaN(minLon) && !isNaN(minLat) && !isNaN(maxLon) && !isNaN(maxLat)) {
-      filters.bbox = { minLat, maxLat, minLon, maxLon };
+      const bbox = { minLat, maxLat, minLon, maxLon };
+      if (validateBbox(bbox)) {
+        filters.bbox = bbox;
+      } else {
+        return c.json({ error: 'Invalid bounding box coordinates' }, 400);
+      }
+    } else {
+      return c.json({ error: 'Invalid bounding box format' }, 400);
     }
   }
   
