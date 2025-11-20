@@ -1,4 +1,5 @@
 // Main Cloudflare Worker entry point
+// This worker handles both HTTP requests (API) and scheduled cron jobs (changeset updates)
 import { Hono } from 'hono';
 import type { Env } from './types';
 import api from './api';
