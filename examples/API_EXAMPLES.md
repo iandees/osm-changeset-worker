@@ -16,6 +16,12 @@ curl "https://YOUR_WORKER_URL/api/changesets?limit=10"
 curl "https://YOUR_WORKER_URL/api/changesets?user_id=123456&limit=20"
 ```
 
+## Get Changesets by Username
+
+```bash
+curl "https://YOUR_WORKER_URL/api/changesets?user_name=mapper_name&limit=20"
+```
+
 ## Get Changesets in a Date Range
 
 ```bash
@@ -30,10 +36,38 @@ Get changesets that intersect with San Francisco area:
 curl "https://YOUR_WORKER_URL/api/changesets?bbox=-122.5,37.7,-122.4,37.8&limit=25"
 ```
 
-## Get Changesets with Multiple Filters
+## Filter Changesets by Tags
+
+Get changesets created with JOSM:
 
 ```bash
-curl "https://YOUR_WORKER_URL/api/changesets?user_id=123456&start_date=2024-01-01T00:00:00Z&bbox=-122.5,37.7,-122.4,37.8&limit=10"
+curl "https://YOUR_WORKER_URL/api/changesets?tags=created_by=JOSM&limit=20"
+```
+
+Get changesets with a specific comment:
+
+```bash
+curl "https://YOUR_WORKER_URL/api/changesets?tags=comment=Fixed%20roads&limit=20"
+```
+
+Get changesets with multiple tag filters (changeset must have ALL specified tags):
+
+```bash
+curl "https://YOUR_WORKER_URL/api/changesets?tags=created_by=iD&tags=imagery_used=Bing&limit=20"
+```
+
+Filter by source tag:
+
+```bash
+curl "https://YOUR_WORKER_URL/api/changesets?tags=source=survey&limit=20"
+```
+
+## Get Changesets with Multiple Filters
+
+Combine user, date, bbox, and tag filters:
+
+```bash
+curl "https://YOUR_WORKER_URL/api/changesets?user_id=123456&start_date=2024-01-01T00:00:00Z&bbox=-122.5,37.7,-122.4,37.8&tags=created_by=JOSM&limit=10"
 ```
 
 ## Get a Specific Changeset

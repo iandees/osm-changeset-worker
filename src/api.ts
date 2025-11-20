@@ -18,6 +18,7 @@ api.use('/*', cors());
  * - start_date: Filter by start date (ISO 8601)
  * - end_date: Filter by end date (ISO 8601)
  * - bbox: Bounding box (format: min_lon,min_lat,max_lon,max_lat)
+ * - tags: Filter by tags (format: key=value, can specify multiple e.g., ?tags=comment=test&tags=created_by=JOSM)
  * - limit: Maximum number of results (default: 100)
  * - offset: Offset for pagination (default: 0)
  */
@@ -27,6 +28,7 @@ api.get('/changesets', async (c) => {
   const startDate = c.req.query('start_date');
   const endDate = c.req.query('end_date');
   const bboxStr = c.req.query('bbox');
+  const tagsParams = c.req.queries('tags');
   const limitStr = c.req.query('limit');
   const offsetStr = c.req.query('offset');
 
@@ -36,6 +38,7 @@ api.get('/changesets', async (c) => {
     startDate?: string;
     endDate?: string;
     bbox?: { minLat: number; maxLat: number; minLon: number; maxLon: number };
+    tags?: Record<string, string>;
     limit?: number;
     offset?: number;
   } = {
@@ -70,6 +73,19 @@ api.get('/changesets', async (c) => {
       }
     } else {
       return c.json({ error: 'Invalid bounding box format' }, 400);
+    }
+  }
+
+  // Parse tags filter - format: key=value
+  if (tagsParams && tagsParams.length > 0) {
+    filters.tags = {};
+    for (const tagParam of tagsParams) {
+      const [key, value] = tagParam.split('=', 2);
+      if (key && value !== undefined) {
+        filters.tags[key] = value;
+      } else {
+        return c.json({ error: 'Invalid tag format. Use: tags=key=value' }, 400);
+      }
     }
   }
 

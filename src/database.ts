@@ -167,6 +167,7 @@ export async function queryChangesets(
     startDate?: string;
     endDate?: string;
     bbox?: { minLat: number; maxLat: number; minLon: number; maxLon: number };
+    tags?: Record<string, string>;
     limit?: number;
     offset?: number;
   }
@@ -215,6 +216,17 @@ export async function queryChangesets(
       filters.bbox.minLon,
       filters.bbox.maxLon
     );
+  }
+
+  // Filter by tags - changeset must have all specified tags with matching values
+  if (filters.tags && Object.keys(filters.tags).length > 0) {
+    for (const [key, value] of Object.entries(filters.tags)) {
+      query += ` AND c.id IN (
+        SELECT changeset_id FROM changeset_tags
+        WHERE key = ? AND value = ?
+      )`;
+      bindings.push(key, value);
+    }
   }
 
   query += ' ORDER BY c.created_at DESC';
