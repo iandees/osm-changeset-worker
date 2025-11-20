@@ -1,0 +1,26 @@
+{
+  "name": "osm-changeset-worker",
+  "version": "1.0.0",
+  "description": "A Cloudflare Worker that tracks OpenStreetMap changesets",
+  "main": "src/index.ts",
+  "scripts": {
+    "dev": "wrangler dev",
+    "deploy": "wrangler deploy",
+    "start": "wrangler dev",
+    "type-check": "tsc --noEmit",
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "devDependencies": {
+    "@cloudflare/workers-types": "^4.20251120.0",
+    "@types/node": "^24.10.1",
+    "typescript": "^5.9.3",
+    "wrangler": "^4.49.0"
+  },
+  "dependencies": {
+    "fast-xml-parser": "^5.3.2",
+    "hono": "^4.10.6"
+  }
+}
