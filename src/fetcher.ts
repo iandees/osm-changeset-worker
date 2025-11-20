@@ -8,19 +8,19 @@ const OSM_REPLICATION_BASE_URL = 'https://planet.openstreetmap.org/replication/c
 /**
  * Get the current replication state from OSM
  */
-export async function fetchReplicationState(sequenceNumber: number): Promise<{ 
-  sequenceNumber: number; 
-  timestamp: string 
+export async function fetchReplicationState(sequenceNumber: number): Promise<{
+  sequenceNumber: number;
+  timestamp: string
 } | null> {
   const path = getReplicationPath(sequenceNumber);
   const stateUrl = `${OSM_REPLICATION_BASE_URL}/${path}.state.txt`;
-  
+
   try {
     const response = await fetch(stateUrl);
     if (!response.ok) {
       return null;
     }
-    
+
     const text = await response.text();
     // Changeset replication uses a YAML-style format with 'last_run' and 'sequence'
     const timestampMatch = text.match(/last_run:\s*(.+)/);
@@ -45,7 +45,7 @@ export async function fetchReplicationState(sequenceNumber: number): Promise<{
 export async function fetchChangesets(sequenceNumber: number): Promise<Changeset[]> {
   const path = getReplicationPath(sequenceNumber);
   const changesetUrl = `${OSM_REPLICATION_BASE_URL}/${path}.osm.gz`;
-  
+
   try {
     // Use retry logic for network requests
     return await retry(async () => {
@@ -57,12 +57,12 @@ export async function fetchChangesets(sequenceNumber: number): Promise<Changeset
         }
         throw new Error(`HTTP ${response.status}: ${response.statusText}`);
       }
-      
+
       // Decompress gzip data
       const compressedData = await response.arrayBuffer();
       const decompressedData = await decompressGzip(compressedData);
       const xmlText = new TextDecoder().decode(decompressedData);
-      
+
       return parseChangesetsXml(xmlText);
     }, 2, 2000); // 2 retries with 2 second initial delay
   } catch (error) {
@@ -79,11 +79,11 @@ async function decompressGzip(data: ArrayBuffer): Promise<Uint8Array> {
   if (!stream) {
     throw new Error('Failed to create stream from data');
   }
-  
+
   const decompressedStream = stream.pipeThrough(
     new DecompressionStream('gzip')
   );
-  
+
   const response = new Response(decompressedStream);
   const buffer = await response.arrayBuffer();
   return new Uint8Array(buffer);
@@ -98,18 +98,18 @@ export function parseChangesetsXml(xmlText: string): Changeset[] {
     attributeNamePrefix: '',
     parseAttributeValue: false
   });
-  
+
   const parsed = parser.parse(xmlText);
-  
+
   if (!parsed.osm || !parsed.osm.changeset) {
     return [];
   }
-  
+
   // Handle single changeset or array of changesets
-  const changesets = Array.isArray(parsed.osm.changeset) 
-    ? parsed.osm.changeset 
+  const changesets = Array.isArray(parsed.osm.changeset)
+    ? parsed.osm.changeset
     : [parsed.osm.changeset];
-  
+
   return changesets.map((cs: OsmApiChangeset) => convertChangeset(cs));
 }
 
@@ -118,17 +118,17 @@ export function parseChangesetsXml(xmlText: string): Changeset[] {
  */
 function convertChangeset(apiChangeset: OsmApiChangeset): Changeset {
   const tags: Record<string, string> = {};
-  
+
   if (apiChangeset.tag) {
-    const tagArray = Array.isArray(apiChangeset.tag) 
-      ? apiChangeset.tag 
+    const tagArray = Array.isArray(apiChangeset.tag)
+      ? apiChangeset.tag
       : [apiChangeset.tag];
-    
+
     tagArray.forEach(tag => {
       tags[tag.k] = tag.v;
     });
   }
-  
+
   return {
     id: parseInt(apiChangeset.id),
     created_at: apiChangeset.created_at,
@@ -164,7 +164,7 @@ export async function getLatestSequenceNumber(): Promise<number | null> {
     if (!response.ok) {
       return null;
     }
-    
+
     const text = await response.text();
     // Changeset replication uses a YAML-style format with 'sequence'
     const match = text.match(/sequence:\s*(\d+)/);

@@ -8,7 +8,7 @@ export async function getReplicationState(db: D1Database): Promise<ReplicationSt
   const result = await db.prepare(
     'SELECT id, sequence_number, timestamp FROM replication_state WHERE id = 1'
   ).first<ReplicationState>();
-  
+
   return result || null;
 }
 
@@ -16,8 +16,8 @@ export async function getReplicationState(db: D1Database): Promise<ReplicationSt
  * Update the replication state in database
  */
 export async function updateReplicationState(
-  db: D1Database, 
-  sequenceNumber: number, 
+  db: D1Database,
+  sequenceNumber: number,
   timestamp: string
 ): Promise<void> {
   await db.prepare(
@@ -49,14 +49,14 @@ export async function storeChangeset(db: D1Database, changeset: Changeset): Prom
     changeset.num_changes || 0,
     changeset.comments_count || 0
   ).run();
-  
+
   // Store tags if present
   if (changeset.tags && Object.keys(changeset.tags).length > 0) {
     // Delete existing tags for this changeset
     await db.prepare('DELETE FROM changeset_tags WHERE changeset_id = ?')
       .bind(changeset.id)
       .run();
-    
+
     // Insert new tags
     for (const [key, value] of Object.entries(changeset.tags)) {
       await db.prepare(`
@@ -74,10 +74,13 @@ export async function storeChangesets(db: D1Database, changesets: Changeset[]): 
   if (changesets.length === 0) {
     return;
   }
-  
+
   // Use batch operations for better performance
   const statements: D1PreparedStatement[] = [];
-  
+
+  // Track unique user_id/user_name pairs to update with their most recent timestamp
+  const userMappings = new Map<string, { userId: number; userName: string; timestamp: string }>();
+
   for (const changeset of changesets) {
     statements.push(
       db.prepare(`
@@ -100,14 +103,28 @@ export async function storeChangesets(db: D1Database, changesets: Changeset[]): 
         changeset.comments_count || 0
       )
     );
-    
+
+    // Track user_id/user_name mapping with changeset timestamp
+    if (changeset.user_id && changeset.user_name) {
+      const key = `${changeset.user_id}:${changeset.user_name}`;
+      const existing = userMappings.get(key);
+      // Keep the latest timestamp for each user_id/user_name pair
+      if (!existing || changeset.created_at > existing.timestamp) {
+        userMappings.set(key, {
+          userId: changeset.user_id,
+          userName: changeset.user_name,
+          timestamp: changeset.created_at
+        });
+      }
+    }
+
     // Add tag deletion and insertion statements
     if (changeset.tags && Object.keys(changeset.tags).length > 0) {
       statements.push(
         db.prepare('DELETE FROM changeset_tags WHERE changeset_id = ?')
           .bind(changeset.id)
       );
-      
+
       for (const [key, value] of Object.entries(changeset.tags)) {
         statements.push(
           db.prepare(`
@@ -118,7 +135,23 @@ export async function storeChangesets(db: D1Database, changesets: Changeset[]): 
       }
     }
   }
-  
+
+  // Add user_name tracking statements
+  // Using INSERT OR REPLACE to handle both new and existing mappings
+  for (const { userId, userName, timestamp } of userMappings.values()) {
+    statements.push(
+      db.prepare(`
+        INSERT INTO user_names (user_id, user_name, first_seen, last_seen)
+        VALUES (?, ?, ?, ?)
+        ON CONFLICT(user_id, user_name) 
+        DO UPDATE SET last_seen = CASE 
+          WHEN excluded.last_seen > last_seen THEN excluded.last_seen 
+          ELSE last_seen 
+        END
+      `).bind(userId, userName, timestamp, timestamp)
+    );
+  }
+
   // Execute all statements in a batch
   await db.batch(statements);
 }
@@ -130,6 +163,7 @@ export async function queryChangesets(
   db: D1Database,
   filters: {
     userId?: number;
+    userName?: string;
     startDate?: string;
     endDate?: string;
     bbox?: { minLat: number; maxLat: number; minLon: number; maxLon: number };
@@ -142,22 +176,30 @@ export async function queryChangesets(
     WHERE 1=1
   `;
   const bindings: (string | number)[] = [];
-  
+
   if (filters.userId) {
     query += ' AND c.user_id = ?';
     bindings.push(filters.userId);
   }
-  
+
+  // Filter by username - lookup user_ids from user_names table
+  if (filters.userName) {
+    query += ` AND c.user_id IN (
+      SELECT DISTINCT user_id FROM user_names WHERE user_name = ?
+    )`;
+    bindings.push(filters.userName);
+  }
+
   if (filters.startDate) {
     query += ' AND c.created_at >= ?';
     bindings.push(filters.startDate);
   }
-  
+
   if (filters.endDate) {
     query += ' AND c.created_at <= ?';
     bindings.push(filters.endDate);
   }
-  
+
   if (filters.bbox) {
     query += ` AND c.min_lat IS NOT NULL 
                AND c.max_lat IS NOT NULL 
@@ -174,22 +216,22 @@ export async function queryChangesets(
       filters.bbox.maxLon
     );
   }
-  
+
   query += ' ORDER BY c.created_at DESC';
-  
+
   if (filters.limit) {
     query += ' LIMIT ?';
     bindings.push(filters.limit);
   }
-  
+
   if (filters.offset) {
     query += ' OFFSET ?';
     bindings.push(filters.offset);
   }
-  
+
   const stmt = db.prepare(query);
   const result = await stmt.bind(...bindings).all<Changeset>();
-  
+
   return result.results || [];
 }
 
@@ -200,25 +242,79 @@ export async function getChangesetById(db: D1Database, id: number): Promise<Chan
   const changeset = await db.prepare(
     'SELECT * FROM changesets WHERE id = ?'
   ).bind(id).first<Changeset>();
-  
+
   if (!changeset) {
     return null;
   }
-  
+
   // Fetch tags
   const tags = await db.prepare(
     'SELECT key, value FROM changeset_tags WHERE changeset_id = ?'
   ).bind(id).all<{ key: string; value: string }>();
-  
+
   if (tags.results && tags.results.length > 0) {
     changeset.tags = {};
     tags.results.forEach(tag => {
       changeset.tags![tag.key] = tag.value;
     });
   }
-  
+
   // Convert open from integer to boolean
   changeset.open = !!(changeset.open as any);
-  
+
   return changeset;
+}
+
+/**
+ * Update or insert a user_id to user_name mapping
+ */
+export async function updateUserName(
+  db: D1Database,
+  userId: number,
+  userName: string,
+  timestamp: string
+): Promise<void> {
+  // Check if this mapping already exists
+  const existing = await db.prepare(
+    'SELECT first_seen FROM user_names WHERE user_id = ? AND user_name = ?'
+  ).bind(userId, userName).first<{ first_seen: string }>();
+
+  if (existing) {
+    // Update last_seen timestamp
+    await db.prepare(
+      'UPDATE user_names SET last_seen = ? WHERE user_id = ? AND user_name = ?'
+    ).bind(timestamp, userId, userName).run();
+  } else {
+    // Insert new mapping
+    await db.prepare(`
+      INSERT INTO user_names (user_id, user_name, first_seen, last_seen)
+      VALUES (?, ?, ?, ?)
+    `).bind(userId, userName, timestamp, timestamp).run();
+  }
+}
+
+/**
+ * Get all usernames for a user_id
+ */
+export async function getUserNames(db: D1Database, userId: number): Promise<Array<{
+  user_name: string;
+  first_seen: string;
+  last_seen: string;
+}>> {
+  const result = await db.prepare(
+    'SELECT user_name, first_seen, last_seen FROM user_names WHERE user_id = ? ORDER BY last_seen DESC'
+  ).bind(userId).all<{ user_name: string; first_seen: string; last_seen: string }>();
+
+  return result.results || [];
+}
+
+/**
+ * Get user_id(s) for a username
+ */
+export async function getUserIdsByName(db: D1Database, userName: string): Promise<number[]> {
+  const result = await db.prepare(
+    'SELECT DISTINCT user_id FROM user_names WHERE user_name = ?'
+  ).bind(userName).all<{ user_id: number }>();
+
+  return result.results?.map(r => r.user_id) || [];
 }
