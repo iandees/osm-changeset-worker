@@ -29,12 +29,17 @@ export async function updateReplicationState(
  * Store a changeset and its tags in the database
  */
 export async function storeChangeset(db: D1Database, changeset: Changeset): Promise<void> {
-  // Insert or replace changeset
+  // Serialize tags to JSON
+  const tagsJson = changeset.tags && Object.keys(changeset.tags).length > 0
+    ? JSON.stringify(changeset.tags)
+    : null;
+
+  // Insert or replace changeset with tags as JSON
   await db.prepare(`
     INSERT OR REPLACE INTO changesets (
       id, created_at, closed_at, open, user_id, user_name,
-      min_lat, max_lat, min_lon, max_lon, num_changes, comments_count
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      min_lat, max_lat, min_lon, max_lon, num_changes, comments_count, tags
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `).bind(
     changeset.id,
     changeset.created_at,
@@ -47,24 +52,9 @@ export async function storeChangeset(db: D1Database, changeset: Changeset): Prom
     changeset.min_lon || null,
     changeset.max_lon || null,
     changeset.num_changes || 0,
-    changeset.comments_count || 0
+    changeset.comments_count || 0,
+    tagsJson
   ).run();
-
-  // Store tags if present
-  if (changeset.tags && Object.keys(changeset.tags).length > 0) {
-    // Delete existing tags for this changeset
-    await db.prepare('DELETE FROM changeset_tags WHERE changeset_id = ?')
-      .bind(changeset.id)
-      .run();
-
-    // Insert new tags
-    for (const [key, value] of Object.entries(changeset.tags)) {
-      await db.prepare(`
-        INSERT INTO changeset_tags (changeset_id, key, value)
-        VALUES (?, ?, ?)
-      `).bind(changeset.id, key, value).run();
-    }
-  }
 }
 
 /**
@@ -82,12 +72,17 @@ export async function storeChangesets(db: D1Database, changesets: Changeset[]): 
   const userMappings = new Map<string, { userId: number; userName: string; timestamp: string }>();
 
   for (const changeset of changesets) {
+    // Serialize tags to JSON
+    const tagsJson = changeset.tags && Object.keys(changeset.tags).length > 0
+      ? JSON.stringify(changeset.tags)
+      : null;
+
     statements.push(
       db.prepare(`
         INSERT OR REPLACE INTO changesets (
           id, created_at, closed_at, open, user_id, user_name,
-          min_lat, max_lat, min_lon, max_lon, num_changes, comments_count
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+          min_lat, max_lat, min_lon, max_lon, num_changes, comments_count, tags
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       `).bind(
         changeset.id,
         changeset.created_at,
@@ -100,7 +95,8 @@ export async function storeChangesets(db: D1Database, changesets: Changeset[]): 
         changeset.min_lon || null,
         changeset.max_lon || null,
         changeset.num_changes || 0,
-        changeset.comments_count || 0
+        changeset.comments_count || 0,
+        tagsJson
       )
     );
 
@@ -115,23 +111,6 @@ export async function storeChangesets(db: D1Database, changesets: Changeset[]): 
           userName: changeset.user_name,
           timestamp: changeset.created_at
         });
-      }
-    }
-
-    // Add tag deletion and insertion statements
-    if (changeset.tags && Object.keys(changeset.tags).length > 0) {
-      statements.push(
-        db.prepare('DELETE FROM changeset_tags WHERE changeset_id = ?')
-          .bind(changeset.id)
-      );
-
-      for (const [key, value] of Object.entries(changeset.tags)) {
-        statements.push(
-          db.prepare(`
-            INSERT INTO changeset_tags (changeset_id, key, value)
-            VALUES (?, ?, ?)
-          `).bind(changeset.id, key, value)
-        );
       }
     }
   }
@@ -173,7 +152,7 @@ export async function queryChangesets(
   }
 ): Promise<Changeset[]> {
   let query = `
-    SELECT DISTINCT c.* FROM changesets c
+    SELECT c.* FROM changesets c
     WHERE 1=1
   `;
   const bindings: (string | number)[] = [];
@@ -218,14 +197,11 @@ export async function queryChangesets(
     );
   }
 
-  // Filter by tags - changeset must have all specified tags with matching values
+  // Filter by tags using SQLite JSON functions
   if (filters.tags && Object.keys(filters.tags).length > 0) {
     for (const [key, value] of Object.entries(filters.tags)) {
-      query += ` AND c.id IN (
-        SELECT changeset_id FROM changeset_tags
-        WHERE key = ? AND value = ?
-      )`;
-      bindings.push(key, value);
+      query += ` AND json_extract(c.tags, ?) = ?`;
+      bindings.push(`$.${key}`, value);
     }
   }
 
@@ -242,9 +218,24 @@ export async function queryChangesets(
   }
 
   const stmt = db.prepare(query);
-  const result = await stmt.bind(...bindings).all<Changeset>();
+  const result = await stmt.bind(...bindings).all<Changeset & { tags: string | null }>();
 
-  return result.results || [];
+  // Parse JSON tags for each result
+  return (result.results || []).map(cs => {
+    const changeset = { ...cs };
+    if (changeset.tags && typeof changeset.tags === 'string') {
+      try {
+        changeset.tags = JSON.parse(changeset.tags);
+      } catch (e) {
+        changeset.tags = {};
+      }
+    } else {
+      changeset.tags = {};
+    }
+    // Convert open from integer to boolean
+    changeset.open = !!(changeset.open as any);
+    return changeset as Changeset;
+  });
 }
 
 /**
@@ -253,22 +244,21 @@ export async function queryChangesets(
 export async function getChangesetById(db: D1Database, id: number): Promise<Changeset | null> {
   const changeset = await db.prepare(
     'SELECT * FROM changesets WHERE id = ?'
-  ).bind(id).first<Changeset>();
+  ).bind(id).first<Changeset & { tags: string | null }>();
 
   if (!changeset) {
     return null;
   }
 
-  // Fetch tags
-  const tags = await db.prepare(
-    'SELECT key, value FROM changeset_tags WHERE changeset_id = ?'
-  ).bind(id).all<{ key: string; value: string }>();
-
-  if (tags.results && tags.results.length > 0) {
+  // Parse JSON tags
+  if (changeset.tags && typeof changeset.tags === 'string') {
+    try {
+      changeset.tags = JSON.parse(changeset.tags);
+    } catch (e) {
+      changeset.tags = {};
+    }
+  } else {
     changeset.tags = {};
-    tags.results.forEach(tag => {
-      changeset.tags![tag.key] = tag.value;
-    });
   }
 
   // Convert open from integer to boolean

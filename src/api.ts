@@ -92,30 +92,11 @@ api.get('/changesets', async (c) => {
   try {
     const changesets = await queryChangesets(c.env.DB, filters);
 
-    // Fetch tags for each changeset
-    const changesetsWithTags = await Promise.all(
-      changesets.map(async (cs) => {
-        const tags = await c.env.DB.prepare(
-          'SELECT key, value FROM changeset_tags WHERE changeset_id = ?'
-        ).bind(cs.id).all<{ key: string; value: string }>();
-
-        if (tags.results && tags.results.length > 0) {
-          cs.tags = {};
-          tags.results.forEach(tag => {
-            cs.tags![tag.key] = tag.value;
-          });
-        }
-
-        // Convert open from integer to boolean
-        cs.open = !!(cs.open as any);
-
-        return cs;
-      })
-    );
-
+    // Tags are already parsed from JSON in queryChangesets
+    // Convert open from integer to boolean (already done in queryChangesets)
     return c.json({
       type: 'FeatureCollection',
-      features: changesetsWithTags.map(changesetToFeature)
+      features: changesets.map(changesetToFeature)
     });
   } catch (error) {
     console.error('Error querying changesets:', error);
