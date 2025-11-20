@@ -16,20 +16,17 @@ import {
 
 const app = new Hono<{ Bindings: Env }>();
 
-// Mount API routes
+// Mount API routes first (so they take precedence)
 app.route('/api', api);
 
-// Root endpoint
-app.get('/', (c) => {
-  return c.json({
-    name: 'OSM Changeset Worker',
-    description: 'A Cloudflare Worker that tracks OpenStreetMap changesets',
-    endpoints: {
-      api: '/api/changesets',
-      stats: '/api/stats',
-      changeset: '/api/changesets/:id'
-    }
-  });
+// Serve static assets - fallback to ASSETS binding if available
+app.get('*', async (c) => {
+  // @ts-ignore - ASSETS binding
+  if (c.env.ASSETS) {
+    // @ts-ignore
+    return c.env.ASSETS.fetch(c.req.raw);
+  }
+  return c.notFound();
 });
 
 /**

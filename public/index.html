@@ -1,0 +1,79 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>OSM Changeset Viewer</title>
+    <link href="https://unpkg.com/maplibre-gl@4.0.0/dist/maplibre-gl.css" rel="stylesheet" />
+    <link rel="stylesheet" href="/style.css">
+</head>
+<body>
+    <div class="container">
+        <!-- Sidebar -->
+        <aside class="sidebar">
+            <div class="sidebar-header">
+                <h1>🗺️ OSM Changeset Viewer</h1>
+                <p class="subtitle">Explore OpenStreetMap changesets in real-time</p>
+            </div>
+
+            <!-- Filters -->
+            <div class="filters">
+                <h2>Filters</h2>
+
+                <div class="filter-group">
+                    <label for="username">Username</label>
+                    <input type="text" id="username" placeholder="Filter by username..." />
+                </div>
+
+                <div class="filter-group">
+                    <label for="tags">Tags</label>
+                    <input type="text" id="tags" placeholder='e.g., comment=test or created_by="iD 2.37.3"' />
+                    <small style="color: #64748b; font-size: 0.75rem; margin-top: 0.25rem; display: block;">
+                        Format: key=value or key="value with spaces" (separate multiple with spaces)
+                    </small>
+                </div>
+
+                <div class="filter-group">
+                    <label for="limit">Limit</label>
+                    <input type="number" id="limit" value="100" min="1" max="1000" />
+                </div>
+
+                <button id="applyFilters" class="btn btn-primary">Apply Filters</button>
+                <button id="clearFilters" class="btn btn-secondary">Clear</button>
+            </div>
+
+            <!-- Changeset List -->
+            <div class="changeset-list">
+                <h2 id="changesetListHeader">Changesets</h2>
+                <div id="changesetItems" class="changeset-items">
+                    <div class="loading">Loading changesets...</div>
+                </div>
+            </div>
+        </aside>
+
+        <!-- Map -->
+        <main class="map-container">
+            <div id="map"></div>
+            <div class="map-controls">
+                <button id="refreshData" class="btn btn-icon" title="Refresh data">
+                    🔄
+                </button>
+                <button id="fitBounds" class="btn btn-icon" title="Fit all changesets">
+                    🎯
+                </button>
+            </div>
+        </main>
+    </div>
+
+    <!-- Changeset Detail Modal -->
+    <div id="modal" class="modal">
+        <div class="modal-content">
+            <span class="modal-close">&times;</span>
+            <div id="modalBody"></div>
+        </div>
+    </div>
+
+    <script src="https://unpkg.com/maplibre-gl@4.0.0/dist/maplibre-gl.js"></script>
+    <script src="/app.js"></script>
+</body>
+</html>
