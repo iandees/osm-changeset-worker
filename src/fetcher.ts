@@ -3,7 +3,7 @@ import { XMLParser } from 'fast-xml-parser';
 import type { Changeset, OsmApiChangeset, ReplicationState } from './types';
 import { retry } from './utils';
 
-const OSM_REPLICATION_BASE_URL = 'https://planet.openstreetmap.org/replication/minute';
+const OSM_REPLICATION_BASE_URL = 'https://planet.openstreetmap.org/replication/changesets';
 
 /**
  * Get the current replication state from OSM
@@ -22,13 +22,14 @@ export async function fetchReplicationState(sequenceNumber: number): Promise<{
     }
     
     const text = await response.text();
-    const timestampMatch = text.match(/timestamp=(.+)/);
-    const seqMatch = text.match(/sequenceNumber=(\d+)/);
-    
+    // Changeset replication uses a YAML-style format with 'last_run' and 'sequence'
+    const timestampMatch = text.match(/last_run:\s*(.+)/);
+    const seqMatch = text.match(/sequence:\s*(\d+)/);
+
     if (timestampMatch && seqMatch) {
       return {
         sequenceNumber: parseInt(seqMatch[1]),
-        timestamp: timestampMatch[1].replace(/\\/g, '').trim()
+        timestamp: timestampMatch[1].trim()
       };
     }
     return null;
@@ -51,7 +52,7 @@ export async function fetchChangesets(sequenceNumber: number): Promise<Changeset
       const response = await fetch(changesetUrl);
       if (!response.ok) {
         if (response.status === 404) {
-          console.log(`No changeset file found for sequence ${sequenceNumber}`);
+          console.log(`No changeset file found for sequence ${sequenceNumber} (tried ${changesetUrl})`);
           return [];
         }
         throw new Error(`HTTP ${response.status}: ${response.statusText}`);
@@ -165,8 +166,9 @@ export async function getLatestSequenceNumber(): Promise<number | null> {
     }
     
     const text = await response.text();
-    const match = text.match(/sequenceNumber=(\d+)/);
-    
+    // Changeset replication uses a YAML-style format with 'sequence'
+    const match = text.match(/sequence:\s*(\d+)/);
+
     if (match) {
       return parseInt(match[1]);
     }
