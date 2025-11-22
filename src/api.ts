@@ -18,6 +18,8 @@ api.use('/*', cors());
  * - start_date: Filter by start date (ISO 8601)
  * - end_date: Filter by end date (ISO 8601)
  * - bbox: Bounding box (format: min_lon,min_lat,max_lon,max_lat)
+ * - bbox_size_min: Minimum bounding box size in square degrees
+ * - bbox_size_max: Maximum bounding box size in square degrees
  * - tags: Filter by tags (format: key=value, can specify multiple e.g., ?tags=comment=test&tags=created_by=JOSM)
  * - limit: Maximum number of results (default: 100)
  * - offset: Offset for pagination (default: 0)
@@ -28,6 +30,8 @@ api.get('/changesets', async (c) => {
   const startDate = c.req.query('start_date');
   const endDate = c.req.query('end_date');
   const bboxStr = c.req.query('bbox');
+  const bboxSizeMinStr = c.req.query('bbox_size_min');
+  const bboxSizeMaxStr = c.req.query('bbox_size_max');
   const tagsParams = c.req.queries('tags');
   const limitStr = c.req.query('limit');
   const offsetStr = c.req.query('offset');
@@ -38,6 +42,8 @@ api.get('/changesets', async (c) => {
     startDate?: string;
     endDate?: string;
     bbox?: { minLat: number; maxLat: number; minLon: number; maxLon: number };
+    bboxSizeMin?: number;
+    bboxSizeMax?: number;
     tags?: Record<string, string>;
     limit?: number;
     offset?: number;
@@ -73,6 +79,24 @@ api.get('/changesets', async (c) => {
       }
     } else {
       return c.json({ error: 'Invalid bounding box format' }, 400);
+    }
+  }
+
+  if (bboxSizeMinStr) {
+    const bboxSizeMin = parseFloat(bboxSizeMinStr);
+    if (!isNaN(bboxSizeMin) && bboxSizeMin >= 0) {
+      filters.bboxSizeMin = bboxSizeMin;
+    } else {
+      return c.json({ error: 'Invalid bbox_size_min value' }, 400);
+    }
+  }
+
+  if (bboxSizeMaxStr) {
+    const bboxSizeMax = parseFloat(bboxSizeMaxStr);
+    if (!isNaN(bboxSizeMax) && bboxSizeMax >= 0) {
+      filters.bboxSizeMax = bboxSizeMax;
+    } else {
+      return c.json({ error: 'Invalid bbox_size_max value' }, 400);
     }
   }
 

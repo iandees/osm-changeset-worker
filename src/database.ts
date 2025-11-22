@@ -122,10 +122,10 @@ export async function storeChangesets(db: D1Database, changesets: Changeset[]): 
       db.prepare(`
         INSERT INTO user_names (user_id, user_name, first_seen, last_seen)
         VALUES (?, ?, ?, ?)
-        ON CONFLICT(user_id, user_name) 
-        DO UPDATE SET last_seen = CASE 
-          WHEN excluded.last_seen > last_seen THEN excluded.last_seen 
-          ELSE last_seen 
+        ON CONFLICT(user_id, user_name)
+        DO UPDATE SET last_seen = CASE
+          WHEN excluded.last_seen > last_seen THEN excluded.last_seen
+          ELSE last_seen
         END
       `).bind(userId, userName, timestamp, timestamp)
     );
@@ -146,6 +146,8 @@ export async function queryChangesets(
     startDate?: string;
     endDate?: string;
     bbox?: { minLat: number; maxLat: number; minLon: number; maxLon: number };
+    bboxSizeMin?: number;
+    bboxSizeMax?: number;
     tags?: Record<string, string>;
     limit?: number;
     offset?: number;
@@ -181,11 +183,11 @@ export async function queryChangesets(
   }
 
   if (filters.bbox) {
-    query += ` AND c.min_lat IS NOT NULL 
-               AND c.max_lat IS NOT NULL 
-               AND c.min_lon IS NOT NULL 
+    query += ` AND c.min_lat IS NOT NULL
+               AND c.max_lat IS NOT NULL
+               AND c.min_lon IS NOT NULL
                AND c.max_lon IS NOT NULL
-               AND c.max_lat >= ? 
+               AND c.max_lat >= ?
                AND c.min_lat <= ?
                AND c.max_lon >= ?
                AND c.min_lon <= ?`;
@@ -195,6 +197,24 @@ export async function queryChangesets(
       filters.bbox.minLon,
       filters.bbox.maxLon
     );
+  }
+
+  // Filter by bbox size (area in square degrees)
+  if (filters.bboxSizeMin !== undefined || filters.bboxSizeMax !== undefined) {
+    query += ` AND c.min_lat IS NOT NULL
+               AND c.max_lat IS NOT NULL
+               AND c.min_lon IS NOT NULL
+               AND c.max_lon IS NOT NULL`;
+
+    if (filters.bboxSizeMin !== undefined) {
+      query += ` AND ((c.max_lon - c.min_lon) * (c.max_lat - c.min_lat)) >= ?`;
+      bindings.push(filters.bboxSizeMin);
+    }
+
+    if (filters.bboxSizeMax !== undefined) {
+      query += ` AND ((c.max_lon - c.min_lon) * (c.max_lat - c.min_lat)) <= ?`;
+      bindings.push(filters.bboxSizeMax);
+    }
   }
 
   // Filter by tags using SQLite JSON functions

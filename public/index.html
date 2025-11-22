@@ -18,28 +18,65 @@
 
             <!-- Filters -->
             <div class="filters">
-                <h2>Filters</h2>
-
-                <div class="filter-group">
-                    <label for="username">Username</label>
-                    <input type="text" id="username" placeholder="Filter by username..." />
+                <div class="filters-header" id="filtersHeader">
+                    <h2>Filters</h2>
+                    <div class="filters-summary" id="filtersSummary"></div>
+                    <button class="filters-toggle" id="filtersToggle" aria-label="Toggle filters">
+                        <span class="toggle-icon">▼</span>
+                    </button>
                 </div>
 
-                <div class="filter-group">
-                    <label for="tags">Tags</label>
-                    <input type="text" id="tags" placeholder='e.g., comment=test or created_by="iD 2.37.3"' />
-                    <small style="color: #64748b; font-size: 0.75rem; margin-top: 0.25rem; display: block;">
-                        Format: key=value or key="value with spaces" (separate multiple with spaces)
-                    </small>
-                </div>
+                <div class="filters-content" id="filtersContent">
+                    <div class="filter-group">
+                        <label for="username">Username</label>
+                        <input type="text" id="username" placeholder="Filter by username..." />
+                    </div>
 
-                <div class="filter-group">
-                    <label for="limit">Limit</label>
-                    <input type="number" id="limit" value="100" min="1" max="1000" />
-                </div>
+                    <div class="filter-group">
+                        <label for="tags">Tags</label>
+                        <input type="text" id="tags" placeholder='e.g., comment=test or created_by="iD 2.37.3"' />
+                        <small style="color: #64748b; font-size: 0.75rem; margin-top: 0.25rem; display: block;">
+                            Format: key=value or key="value with spaces" (separate multiple with spaces)
+                        </small>
+                    </div>
 
-                <button id="applyFilters" class="btn btn-primary">Apply Filters</button>
-                <button id="clearFilters" class="btn btn-secondary">Clear</button>
+                    <div class="filter-group">
+                        <label>Bounding Box</label>
+                        <div id="bboxDisplay" class="bbox-display">
+                            <span class="bbox-placeholder">Draw on map or enter coordinates</span>
+                        </div>
+                        <div class="bbox-inputs" style="display: none;">
+                            <input type="number" id="bboxMinLon" placeholder="Min Lon" step="0.0001" />
+                            <input type="number" id="bboxMinLat" placeholder="Min Lat" step="0.0001" />
+                            <input type="number" id="bboxMaxLon" placeholder="Max Lon" step="0.0001" />
+                            <input type="number" id="bboxMaxLat" placeholder="Max Lat" step="0.0001" />
+                        </div>
+                        <button id="drawBbox" class="btn btn-secondary" style="margin-bottom: 0.5rem;">
+                            📍 Draw Bounding Box on Map
+                        </button>
+                        <button id="clearBbox" class="btn btn-secondary" style="display: none;">
+                            ✕ Clear Bounding Box
+                        </button>
+                    </div>
+
+                    <div class="filter-group">
+                        <label for="bboxSizeMin">Min Bbox Size (sq degrees)</label>
+                        <input type="number" id="bboxSizeMin" placeholder="e.g., 0.001" step="0.001" min="0" />
+                    </div>
+
+                    <div class="filter-group">
+                        <label for="bboxSizeMax">Max Bbox Size (sq degrees)</label>
+                        <input type="number" id="bboxSizeMax" placeholder="e.g., 1.0" step="0.001" min="0" />
+                    </div>
+
+                    <div class="filter-group">
+                        <label for="limit">Limit</label>
+                        <input type="number" id="limit" value="100" min="1" max="1000" />
+                    </div>
+
+                    <button id="applyFilters" class="btn btn-primary">Apply Filters</button>
+                    <button id="clearFilters" class="btn btn-secondary">Clear</button>
+                </div>
             </div>
 
             <!-- Changeset List -->

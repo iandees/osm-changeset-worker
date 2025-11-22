@@ -7,6 +7,10 @@ class ChangesetViewer {
         this.map = null;
         this.markers = {};
         this.osmchaData = null; // Store current OSMCha data
+        this.bboxFilter = null; // Store bounding box filter
+        this.bboxDrawing = false; // Track if we're in bbox drawing mode
+        this.bboxDrawStart = null; // Starting point for bbox drawing
+        this.bboxDrawLayer = null; // Layer for drawing bbox preview
 
         this.init();
     }
@@ -15,6 +19,7 @@ class ChangesetViewer {
         this.initMap();
         this.initEventListeners();
         await this.loadChangesets();
+        this.updateFilterSummary();
     }
 
     initMap() {
@@ -27,9 +32,7 @@ class ChangesetViewer {
                     'osm': {
                         type: 'raster',
                         tiles: [
-                            'https://a.tile.openstreetmap.org/{z}/{x}/{y}.png',
-                            'https://b.tile.openstreetmap.org/{z}/{x}/{y}.png',
-                            'https://c.tile.openstreetmap.org/{z}/{x}/{y}.png'
+                            'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
                         ],
                         tileSize: 256,
                         attribution: '© OpenStreetMap contributors'
@@ -71,6 +74,36 @@ class ChangesetViewer {
             this.fitAllChangesets();
         });
 
+        // Bounding box controls
+        document.getElementById('drawBbox').addEventListener('click', () => {
+            this.toggleBboxDrawing();
+        });
+
+        document.getElementById('clearBbox').addEventListener('click', () => {
+            this.clearBboxFilter();
+        });
+
+        // Bbox input changes
+        ['bboxMinLon', 'bboxMinLat', 'bboxMaxLon', 'bboxMaxLat'].forEach(id => {
+            document.getElementById(id).addEventListener('input', () => {
+                this.updateBboxFromInputs();
+            });
+        });
+
+        // Filters toggle
+        document.getElementById('filtersToggle').addEventListener('click', () => {
+            this.toggleFilters();
+        });
+
+        document.getElementById('filtersHeader').addEventListener('click', (e) => {
+            // Only toggle if clicking on the header itself, not on child elements
+            if (e.target === document.getElementById('filtersHeader') ||
+                e.target.tagName === 'H2' ||
+                e.target.classList.contains('filters-summary')) {
+                this.toggleFilters();
+            }
+        });
+
         // Modal
         document.querySelector('.modal-close').addEventListener('click', () => {
             this.closeModal();
@@ -108,6 +141,8 @@ class ChangesetViewer {
         const limit = document.getElementById('limit').value;
         const username = document.getElementById('username').value.trim();
         const tagsInput = document.getElementById('tags').value.trim();
+        const bboxSizeMin = document.getElementById('bboxSizeMin').value.trim();
+        const bboxSizeMax = document.getElementById('bboxSizeMax').value.trim();
 
         try {
             const changesetItems = document.getElementById('changesetItems');
@@ -117,6 +152,20 @@ class ChangesetViewer {
             let url = `/api/changesets?limit=${limit}`;
             if (username) {
                 url += `&user_name=${encodeURIComponent(username)}`;
+            }
+
+            // Add bounding box filter if set
+            if (this.bboxFilter) {
+                const { minLon, minLat, maxLon, maxLat } = this.bboxFilter;
+                url += `&bbox=${minLon},${minLat},${maxLon},${maxLat}`;
+            }
+
+            // Add bbox size filters
+            if (bboxSizeMin) {
+                url += `&bbox_size_min=${encodeURIComponent(bboxSizeMin)}`;
+            }
+            if (bboxSizeMax) {
+                url += `&bbox_size_max=${encodeURIComponent(bboxSizeMax)}`;
             }
 
             // Parse tags input - format: key=value or key="value with spaces"
@@ -171,6 +220,9 @@ class ChangesetViewer {
             console.log('Loaded changesets:', this.changesets.length);
 
             this.applyFilters();
+
+            // Update filter summary after loading changesets
+            this.updateFilterSummary();
         } catch (error) {
             console.error('Error loading changesets:', error);
             this.changesets = [];
@@ -236,6 +288,11 @@ class ChangesetViewer {
         document.getElementById('username').value = '';
         document.getElementById('tags').value = '';
         document.getElementById('limit').value = '100';
+        document.getElementById('bboxSizeMin').value = '';
+        document.getElementById('bboxSizeMax').value = '';
+
+        // Clear bounding box filter
+        this.clearBboxFilter();
 
         // Clear OSMCha data when filters are cleared
         this.clearOSMChaData();
@@ -432,7 +489,7 @@ class ChangesetViewer {
                     <div class="popup-title">Changeset #${feature.properties.id}</div>
                     <div class="popup-detail">👤 ${feature.properties.user_name}</div>
                     <div class="popup-detail">📝 ${feature.properties.num_changes} changes</div>
-                    ${feature.properties.comment ? 
+                    ${feature.properties.comment ?
                         `<div class="popup-detail">"${this.escapeHtml(feature.properties.comment)}"</div>` : ''}
                 `)
                 .addTo(this.map);
@@ -664,10 +721,10 @@ class ChangesetViewer {
                 Changeset #${changeset.id}
                 <span class="changeset-status ${statusClass}">${status}</span>
             </div>
-            
+
             <div class="modal-section">
                 <h3>User</h3>
-                <p>👤 ${this.escapeHtml(changeset.user_name || 'Unknown')} 
+                <p>👤 ${this.escapeHtml(changeset.user_name || 'Unknown')}
                    ${changeset.user_id ? `(ID: ${changeset.user_id})` : ''}</p>
             </div>
 
@@ -676,7 +733,7 @@ class ChangesetViewer {
                 <p>📝 ${changeset.num_changes || 0} changes</p>
                 <p>💬 ${changeset.comments_count || 0} comments</p>
                 <p>📅 Created: ${new Date(changeset.created_at).toLocaleString()}</p>
-                ${changeset.closed_at ? 
+                ${changeset.closed_at ?
                     `<p>🔒 Closed: ${new Date(changeset.closed_at).toLocaleString()}</p>` : ''}
             </div>
 
@@ -698,8 +755,8 @@ class ChangesetViewer {
             ` : ''}
 
             <div class="modal-section">
-                <a href="https://www.openstreetmap.org/changeset/${changeset.id}" 
-                   target="_blank" 
+                <a href="https://www.openstreetmap.org/changeset/${changeset.id}"
+                   target="_blank"
                    class="btn btn-primary">
                     View on OpenStreetMap ↗
                 </a>
@@ -756,6 +813,353 @@ class ChangesetViewer {
         const div = document.createElement('div');
         div.textContent = text;
         return div.innerHTML;
+    }
+
+    // Bounding Box Drawing Methods
+    toggleBboxDrawing() {
+        if (this.bboxDrawing) {
+            this.cancelBboxDrawing();
+        } else {
+            this.startBboxDrawing();
+        }
+    }
+
+    startBboxDrawing() {
+        this.bboxDrawing = true;
+        this.bboxDrawStart = null;
+
+        // Update button appearance
+        const drawBtn = document.getElementById('drawBbox');
+        drawBtn.textContent = 'Click map to start box';
+        drawBtn.style.background = '#ef4444';
+        drawBtn.style.color = 'white';
+
+        // Change cursor
+        this.map.getCanvas().style.cursor = 'crosshair';
+
+        // Add map event listeners for drawing
+        this.map.once('click', this.onBboxDrawStart.bind(this));
+
+        console.log('Bbox drawing mode activated');
+    }
+
+    onBboxDrawStart(e) {
+        if (!this.bboxDrawing) return;
+
+        this.bboxDrawStart = e.lngLat;
+
+        // Update instruction
+        document.getElementById('drawBbox').textContent = 'Click map to finish box';
+
+        // Add mousemove listener to show preview
+        // Store bound function to remove it later
+        this._boundOnBboxDrawMove = this.onBboxDrawMove.bind(this);
+        this.map.on('mousemove', this._boundOnBboxDrawMove);
+
+        // Add click listener to finish drawing
+        this.map.once('click', this.onBboxDrawEnd.bind(this));
+    }
+
+    onBboxDrawMove(e) {
+        if (!this.bboxDrawStart) return;
+
+        const start = this.bboxDrawStart;
+        const end = e.lngLat;
+
+        // Create bbox preview
+        const minLon = Math.min(start.lng, end.lng);
+        const maxLon = Math.max(start.lng, end.lng);
+        const minLat = Math.min(start.lat, end.lat);
+        const maxLat = Math.max(start.lat, end.lat);
+
+        // Remove old preview layer
+        if (this.map.getLayer('bbox-preview')) {
+            this.map.removeLayer('bbox-preview');
+        }
+        if (this.map.getSource('bbox-preview')) {
+            this.map.removeSource('bbox-preview');
+        }
+
+        // Add new preview layer
+        this.map.addSource('bbox-preview', {
+            type: 'geojson',
+            data: {
+                type: 'Feature',
+                geometry: {
+                    type: 'Polygon',
+                    coordinates: [[
+                        [minLon, minLat],
+                        [maxLon, minLat],
+                        [maxLon, maxLat],
+                        [minLon, maxLat],
+                        [minLon, minLat]
+                    ]]
+                }
+            }
+        });
+
+        this.map.addLayer({
+            id: 'bbox-preview',
+            type: 'fill',
+            source: 'bbox-preview',
+            paint: {
+                'fill-color': '#ef4444',
+                'fill-opacity': 0.2
+            }
+        });
+
+        this.map.addLayer({
+            id: 'bbox-preview-outline',
+            type: 'line',
+            source: 'bbox-preview',
+            paint: {
+                'line-color': '#ef4444',
+                'line-width': 2,
+                'line-dasharray': [2, 2]
+            }
+        });
+    }
+
+    onBboxDrawEnd(e) {
+        if (!this.bboxDrawStart) return;
+
+        // Remove mousemove listener
+        if (this._boundOnBboxDrawMove) {
+            this.map.off('mousemove', this._boundOnBboxDrawMove);
+            this._boundOnBboxDrawMove = null;
+        }
+
+        const start = this.bboxDrawStart;
+        const end = e.lngLat;
+
+        const minLon = Math.min(start.lng, end.lng);
+        const maxLon = Math.max(start.lng, end.lng);
+        const minLat = Math.min(start.lat, end.lat);
+        const maxLat = Math.max(start.lat, end.lat);
+
+        // Set the bounding box filter
+        this.setBboxFilter(minLon, minLat, maxLon, maxLat);
+
+        // Clean up drawing state
+        this.cancelBboxDrawing();
+    }
+
+    cancelBboxDrawing() {
+        this.bboxDrawing = false;
+        this.bboxDrawStart = null;
+
+        // Reset button appearance
+        const drawBtn = document.getElementById('drawBbox');
+        drawBtn.textContent = '📍 Draw Bounding Box on Map';
+        drawBtn.style.background = '';
+        drawBtn.style.color = '';
+
+        // Reset cursor
+        this.map.getCanvas().style.cursor = '';
+
+        // Remove listeners if active
+        if (this._boundOnBboxDrawMove) {
+            this.map.off('mousemove', this._boundOnBboxDrawMove);
+            this._boundOnBboxDrawMove = null;
+        }
+
+        // Remove preview layers
+        if (this.map.getLayer('bbox-preview-outline')) {
+            this.map.removeLayer('bbox-preview-outline');
+        }
+        if (this.map.getLayer('bbox-preview')) {
+            this.map.removeLayer('bbox-preview');
+        }
+        if (this.map.getSource('bbox-preview')) {
+            this.map.removeSource('bbox-preview');
+        }
+
+        console.log('Bbox drawing mode cancelled');
+    }
+
+    setBboxFilter(minLon, minLat, maxLon, maxLat) {
+        this.bboxFilter = { minLon, minLat, maxLon, maxLat };
+
+        // Update input fields
+        document.getElementById('bboxMinLon').value = minLon.toFixed(4);
+        document.getElementById('bboxMinLat').value = minLat.toFixed(4);
+        document.getElementById('bboxMaxLon').value = maxLon.toFixed(4);
+        document.getElementById('bboxMaxLat').value = maxLat.toFixed(4);
+
+        // Update display
+        this.updateBboxDisplay();
+
+        // Show clear button
+        document.getElementById('clearBbox').style.display = 'block';
+
+        // Render bbox on map
+        this.renderBboxOnMap();
+
+        console.log('Bbox filter set:', this.bboxFilter);
+    }
+
+    updateBboxFromInputs() {
+        const minLon = parseFloat(document.getElementById('bboxMinLon').value);
+        const minLat = parseFloat(document.getElementById('bboxMinLat').value);
+        const maxLon = parseFloat(document.getElementById('bboxMaxLon').value);
+        const maxLat = parseFloat(document.getElementById('bboxMaxLat').value);
+
+        if (!isNaN(minLon) && !isNaN(minLat) && !isNaN(maxLon) && !isNaN(maxLat)) {
+            this.bboxFilter = { minLon, minLat, maxLon, maxLat };
+            this.updateBboxDisplay();
+            this.renderBboxOnMap();
+            document.getElementById('clearBbox').style.display = 'block';
+        }
+    }
+
+    updateBboxDisplay() {
+        const display = document.getElementById('bboxDisplay');
+
+        if (this.bboxFilter) {
+            const { minLon, minLat, maxLon, maxLat } = this.bboxFilter;
+            display.innerHTML = `<span class="bbox-coords">${minLon.toFixed(4)}, ${minLat.toFixed(4)} to ${maxLon.toFixed(4)}, ${maxLat.toFixed(4)}</span>`;
+        } else {
+            display.innerHTML = '<span class="bbox-placeholder">Draw on map or enter coordinates</span>';
+        }
+    }
+
+    renderBboxOnMap() {
+        // Remove old bbox layer
+        if (this.map.getLayer('bbox-filter-outline')) {
+            this.map.removeLayer('bbox-filter-outline');
+        }
+        if (this.map.getLayer('bbox-filter')) {
+            this.map.removeLayer('bbox-filter');
+        }
+        if (this.map.getSource('bbox-filter')) {
+            this.map.removeSource('bbox-filter');
+        }
+
+        if (!this.bboxFilter) return;
+
+        const { minLon, minLat, maxLon, maxLat } = this.bboxFilter;
+
+        // Add bbox layer
+        this.map.addSource('bbox-filter', {
+            type: 'geojson',
+            data: {
+                type: 'Feature',
+                geometry: {
+                    type: 'Polygon',
+                    coordinates: [[
+                        [minLon, minLat],
+                        [maxLon, minLat],
+                        [maxLon, maxLat],
+                        [minLon, maxLat],
+                        [minLon, minLat]
+                    ]]
+                }
+            }
+        });
+
+        this.map.addLayer({
+            id: 'bbox-filter',
+            type: 'fill',
+            source: 'bbox-filter',
+            paint: {
+                'fill-color': '#f59e0b',
+                'fill-opacity': 0.1
+            }
+        });
+
+        this.map.addLayer({
+            id: 'bbox-filter-outline',
+            type: 'line',
+            source: 'bbox-filter',
+            paint: {
+                'line-color': '#f59e0b',
+                'line-width': 3
+            }
+        });
+    }
+
+    clearBboxFilter() {
+        this.bboxFilter = null;
+
+        // Clear input fields
+        document.getElementById('bboxMinLon').value = '';
+        document.getElementById('bboxMinLat').value = '';
+        document.getElementById('bboxMaxLon').value = '';
+        document.getElementById('bboxMaxLat').value = '';
+
+        // Update display
+        this.updateBboxDisplay();
+
+        // Hide clear button
+        document.getElementById('clearBbox').style.display = 'none';
+
+        // Remove bbox from map
+        if (this.map.getLayer('bbox-filter-outline')) {
+            this.map.removeLayer('bbox-filter-outline');
+        }
+        if (this.map.getLayer('bbox-filter')) {
+            this.map.removeLayer('bbox-filter');
+        }
+        if (this.map.getSource('bbox-filter')) {
+            this.map.removeSource('bbox-filter');
+        }
+
+        // Update filter summary
+        this.updateFilterSummary();
+
+        console.log('Bbox filter cleared');
+    }
+
+    // Filter UI Methods
+    toggleFilters() {
+        const filtersDiv = document.querySelector('.filters');
+        filtersDiv.classList.toggle('collapsed');
+    }
+
+    updateFilterSummary() {
+        const summary = document.getElementById('filtersSummary');
+        const filters = [];
+
+        // Check username filter
+        const username = document.getElementById('username').value.trim();
+        if (username) {
+            filters.push(`<span class="filter-tag">👤 ${this.escapeHtml(username)}</span>`);
+        }
+
+        // Check tags filter
+        const tags = document.getElementById('tags').value.trim();
+        if (tags) {
+            filters.push(`<span class="filter-tag">🏷️ ${this.escapeHtml(tags)}</span>`);
+        }
+
+        // Check bbox filter
+        if (this.bboxFilter) {
+            filters.push(`<span class="filter-tag">📍 BBox</span>`);
+        }
+
+        // Check bbox size filters
+        const bboxSizeMin = document.getElementById('bboxSizeMin').value.trim();
+        if (bboxSizeMin) {
+            filters.push(`<span class="filter-tag">📏 Min: ${bboxSizeMin}</span>`);
+        }
+
+        const bboxSizeMax = document.getElementById('bboxSizeMax').value.trim();
+        if (bboxSizeMax) {
+            filters.push(`<span class="filter-tag">📏 Max: ${bboxSizeMax}</span>`);
+        }
+
+        // Check limit (only show if not default)
+        const limit = document.getElementById('limit').value;
+        if (limit !== '100') {
+            filters.push(`<span class="filter-tag">Limit: ${limit}</span>`);
+        }
+
+        // Update summary display
+        if (filters.length > 0) {
+            summary.innerHTML = filters.join('');
+        } else {
+            summary.innerHTML = '<span style="color: #94a3b8; font-style: italic;">No filters applied</span>';
+        }
     }
 }
 
