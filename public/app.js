@@ -35,6 +35,7 @@ class ChangesetViewer {
                             'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
                         ],
                         tileSize: 256,
+                        maxzoom: 19,
                         attribution: '© OpenStreetMap contributors'
                     }
                 },
@@ -43,7 +44,7 @@ class ChangesetViewer {
                     type: 'raster',
                     source: 'osm',
                     minzoom: 0,
-                    maxzoom: 19
+                    maxzoom: 22
                 }]
             },
             center: [0, 20],
@@ -544,31 +545,6 @@ class ChangesetViewer {
             this.map.getCanvas().style.cursor = '';
         });
 
-        // Add popup on hover
-        const popup = new maplibregl.Popup({
-            closeButton: false,
-            closeOnClick: false
-        });
-
-        this.map.on('mouseenter', 'changesets-fill', (e) => {
-            const feature = e.features[0];
-            const coords = e.lngLat;
-
-            popup.setLngLat(coords)
-                .setHTML(`
-                    <div class="popup-title">Changeset #${feature.properties.id}</div>
-                    <div class="popup-detail">👤 ${feature.properties.user_name}</div>
-                    <div class="popup-detail">📝 ${feature.properties.num_changes} changes</div>
-                    ${feature.properties.comment ?
-                        `<div class="popup-detail">"${this.escapeHtml(feature.properties.comment)}"</div>` : ''}
-                `)
-                .addTo(this.map);
-        });
-
-        this.map.on('mouseleave', 'changesets-fill', () => {
-            popup.remove();
-        });
-
         console.log('Map rendering complete');
     }
 
@@ -608,8 +584,8 @@ class ChangesetViewer {
             const height = changeset.max_lat - changeset.min_lat;
             const area = width * height;
 
-            // If the area is very small (< 0.1 square degrees), add padding
-            const minArea = 0.1;
+            // If the area is very small (< 0.00001 square degrees), add padding
+            const minArea = 0.00001;
             let bounds;
 
             if (area < minArea) {
@@ -623,7 +599,7 @@ class ChangesetViewer {
                     [centerLon + padding, centerLat + padding]
                 ];
 
-                console.log(`Small changeset detected (area: ${area.toFixed(6)}). Adding padding.`);
+                console.log(`Small changeset detected (area: ${area.toFixed(6)}). Added padding and new bounds is ${JSON.stringify(bounds)}.`);
             } else {
                 bounds = [
                     [changeset.min_lon, changeset.min_lat],
@@ -632,8 +608,9 @@ class ChangesetViewer {
             }
 
             this.map.fitBounds(bounds, {
-                padding: { top: 50, bottom: 300, left: 50, right: 50 }, // Add bottom padding for panel
-                maxZoom: 15
+                padding: { top: 10, bottom: 300, left: 10, right: 10 }, // Add bottom padding for panel
+                maxZoom: 22,
+                duration: 250,
             });
         }
 
