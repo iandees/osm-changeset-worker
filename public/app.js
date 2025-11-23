@@ -618,6 +618,12 @@ class ChangesetViewer {
         const status = changeset.open ? 'Open' : 'Closed';
         const statusClass = changeset.open ? 'status-open' : 'status-closed';
 
+        const createdBy = changeset.tags && changeset.tags['created_by'];
+        const createdByHtml = createdBy ? `
+            <p>🛠️ ${this.escapeHtml(createdBy)}
+               <button class="filter-tag-btn" title="Filter by this editor" data-tag="created_by=${this.escapeHtml(createdBy)}" style="background: none; border: none; cursor: pointer; padding: 0 4px; font-size: 0.875rem;">🔍</button>
+            </p>` : '';
+
         const tagRows = Object.entries(changeset.tags || {})
             .map(([key, value]) => `
                 <tr>
@@ -643,6 +649,7 @@ class ChangesetViewer {
                     <p>👤 ${this.escapeHtml(changeset.user_name || 'Unknown')}
                        <button class="filter-user-btn" title="Filter by this user" data-username="${this.escapeHtml(changeset.user_name || '')}" style="background: none; border: none; cursor: pointer; padding: 0 4px; font-size: 0.875rem;">🔍</button>
                        ${changeset.user_id ? `<span style="color: #94a3b8; font-size: 0.875rem;">(ID: ${changeset.user_id})</span>` : ''}</p>
+                    ${createdByHtml}
                     <p>📝 ${changeset.num_changes || 0} changes</p>
                     <p>💬 ${changeset.comments_count || 0} comments</p>
                     <p>📅 ${new Date(changeset.created_at).toLocaleString()}</p>
@@ -670,14 +677,48 @@ class ChangesetViewer {
             </div>
         `;
 
-        // Add event listener for filter button
+        // Add event listener for username filter button
         const filterUserBtn = panelContent.querySelector('.filter-user-btn');
         if (filterUserBtn) {
             filterUserBtn.addEventListener('click', (e) => {
                 e.preventDefault();
-                const username = e.target.dataset.username;
+                const username = e.currentTarget.dataset.username;
                 if (username) {
                     document.getElementById('username').value = username;
+                    this.loadChangesets();
+
+                    // Ensure filters are visible
+                    const filtersDiv = document.querySelector('.filters');
+                    if (filtersDiv.classList.contains('collapsed')) {
+                        this.toggleFilters();
+                    }
+                }
+            });
+        }
+
+        // Add event listener for created_by filter button
+        const filterTagBtn = panelContent.querySelector('.filter-tag-btn');
+        if (filterTagBtn) {
+            filterTagBtn.addEventListener('click', (e) => {
+                e.preventDefault();
+                const tagFilter = e.currentTarget.dataset.tag;
+                if (tagFilter) {
+                    const tagInput = document.getElementById('tags');
+
+                    // Format the tag filter (quote value if it has spaces)
+                    const parts = tagFilter.split('=');
+                    const key = parts[0];
+                    const val = parts.slice(1).join('=');
+                    const formattedFilter = val.includes(' ') ? `${key}="${val}"` : tagFilter;
+
+                    // Append or set
+                    const currentVal = tagInput.value.trim();
+                    if (currentVal && !currentVal.includes(formattedFilter)) {
+                        tagInput.value = currentVal + ' ' + formattedFilter;
+                    } else if (!currentVal) {
+                        tagInput.value = formattedFilter;
+                    }
+
                     this.loadChangesets();
 
                     // Ensure filters are visible
