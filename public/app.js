@@ -2,7 +2,6 @@
 class ChangesetViewer {
     constructor() {
         this.changesets = [];
-        this.filteredChangesets = [];
         this.selectedChangeset = null;
         this.map = null;
         this.markers = {};
@@ -329,10 +328,7 @@ class ChangesetViewer {
             this.changesets = [];
         }
 
-        // No client-side filters needed anymore - all filtering is done server-side
-        this.filteredChangesets = this.changesets;
-
-        console.log('Filtered changesets:', this.filteredChangesets.length);
+        console.log('Changesets:', this.changesets.length);
 
         this.renderChangesets();
         this.renderMap();
@@ -367,25 +363,25 @@ class ChangesetViewer {
 
         // Update the header with count
         const header = document.getElementById('changesetListHeader');
-        header.innerHTML = `Changesets <span style="font-size: 0.875rem; color: #94a3b8; font-weight: 400;">(${this.filteredChangesets.length.toLocaleString()})</span>`;
+        header.innerHTML = `Changesets <span style="font-size: 0.875rem; color: #94a3b8; font-weight: 400;">(${this.changesets.length.toLocaleString()})</span>`;
 
-        console.log('renderChangesets called with', this.filteredChangesets.length, 'changesets');
+        console.log('renderChangesets called with', this.changesets.length, 'changesets');
 
-        if (this.filteredChangesets.length === 0) {
+        if (this.changesets.length === 0) {
             changesetItems.innerHTML = '<div class="loading">No changesets found</div>';
             return;
         }
 
-        changesetItems.innerHTML = this.filteredChangesets
+        changesetItems.innerHTML = this.changesets
             .map(cs => this.createChangesetItem(cs))
             .join('');
 
-        console.log('Rendered', this.filteredChangesets.length, 'changeset items');
+        console.log('Rendered', this.changesets.length, 'changeset items');
 
         // Add click listeners
         changesetItems.querySelectorAll('.changeset-item').forEach((item, index) => {
             item.addEventListener('click', () => {
-                this.selectChangeset(this.filteredChangesets[index]);
+                this.selectChangeset(this.changesets[index]);
             });
         });
     }
@@ -435,7 +431,7 @@ class ChangesetViewer {
         }
 
         // Create GeoJSON features for changesets with bounding boxes
-        const features = this.filteredChangesets
+        const features = this.changesets
             .filter(cs => this.hasBoundingBox(cs))
             .map(cs => ({
                 type: 'Feature',
@@ -534,7 +530,7 @@ class ChangesetViewer {
         this.map.on('click', 'changesets-fill', (e) => {
             const feature = e.features[0];
             const changesetId = feature.properties.id;
-            const changeset = this.filteredChangesets.find(cs => cs.id === changesetId);
+            const changeset = this.changesets.find(cs => cs.id === changesetId);
             if (changeset) {
                 this.selectChangeset(changeset);
             }
@@ -874,7 +870,7 @@ class ChangesetViewer {
     }
 
     fitAllChangesets() {
-        const changesetsWithBbox = this.filteredChangesets.filter(cs => this.hasBoundingBox(cs));
+        const changesetsWithBbox = this.changesets.filter(cs => this.hasBoundingBox(cs));
 
         if (changesetsWithBbox.length === 0) {
             return;
