@@ -5,7 +5,6 @@ class ChangesetViewer {
         this.selectedChangeset = null;
         this.map = null;
         this.markers = {};
-        this.osmchaData = null; // Store current OSMCha data
         this.bboxFilter = null; // Store bounding box filter
         this.bboxDrawing = false; // Track if we're in bbox drawing mode
         this.bboxDrawStart = null; // Starting point for bbox drawing
@@ -345,9 +344,6 @@ class ChangesetViewer {
         // Clear bounding box filter
         this.clearBboxFilter();
 
-        // Clear OSMCha data when filters are cleared
-        this.clearOSMChaData();
-
         // Reload with cleared filters
         this.loadChangesets();
     }
@@ -616,155 +612,6 @@ class ChangesetViewer {
 
         // Show panel with details
         this.showChangesetDetails(changeset);
-
-        // Fetch and render OSMCha data
-        await this.loadOSMChaData(changeset.id);
-    }
-
-    async loadOSMChaData(changesetId) {
-        try {
-            console.log(`Fetching OSMCha data for changeset ${changesetId}`);
-            const response = await fetch(`https://osmcha.org/api/v1/changesets/${changesetId}/`);
-
-            if (!response.ok) {
-                console.warn(`OSMCha API returned ${response.status} for changeset ${changesetId}`);
-                return;
-            }
-
-            const data = await response.json();
-            console.log('OSMCha data received:', data);
-
-            this.osmchaData = data;
-            this.renderOSMChaData();
-        } catch (error) {
-            console.error('Error fetching OSMCha data:', error);
-        }
-    }
-
-    renderOSMChaData() {
-        // Remove existing OSMCha layers first
-        this.clearOSMChaData();
-
-        if (!this.osmchaData || !this.osmchaData.geojson) {
-            console.log('No GeoJSON data to render from OSMCha');
-            return;
-        }
-
-        const geojson = this.osmchaData.geojson;
-
-        // Add source for OSMCha features
-        this.map.addSource('osmcha-features', {
-            type: 'geojson',
-            data: geojson
-        });
-
-        console.log('Added OSMCha GeoJSON source with features:', geojson.features?.length || 0);
-
-        // Add layers for different geometry types
-        // Points
-        this.map.addLayer({
-            id: 'osmcha-points',
-            type: 'circle',
-            source: 'osmcha-features',
-            filter: ['==', ['geometry-type'], 'Point'],
-            paint: {
-                'circle-radius': 6,
-                'circle-color': '#ef4444',
-                'circle-stroke-color': '#ffffff',
-                'circle-stroke-width': 2,
-                'circle-opacity': 0.8
-            }
-        });
-
-        // Lines
-        this.map.addLayer({
-            id: 'osmcha-lines',
-            type: 'line',
-            source: 'osmcha-features',
-            filter: ['==', ['geometry-type'], 'LineString'],
-            paint: {
-                'line-color': '#ef4444',
-                'line-width': 3,
-                'line-opacity': 0.8
-            }
-        });
-
-        // Polygons fill
-        this.map.addLayer({
-            id: 'osmcha-polygons-fill',
-            type: 'fill',
-            source: 'osmcha-features',
-            filter: ['==', ['geometry-type'], 'Polygon'],
-            paint: {
-                'fill-color': '#ef4444',
-                'fill-opacity': 0.3
-            }
-        });
-
-        // Polygons outline
-        this.map.addLayer({
-            id: 'osmcha-polygons-outline',
-            type: 'line',
-            source: 'osmcha-features',
-            filter: ['==', ['geometry-type'], 'Polygon'],
-            paint: {
-                'line-color': '#ef4444',
-                'line-width': 2,
-                'line-opacity': 0.8
-            }
-        });
-
-        console.log('OSMCha layers added to map');
-
-        // Add hover interactions for OSMCha features
-        const popup = new maplibregl.Popup({
-            closeButton: false,
-            closeOnClick: false
-        });
-
-        ['osmcha-points', 'osmcha-lines', 'osmcha-polygons-fill'].forEach(layerId => {
-            this.map.on('mouseenter', layerId, (e) => {
-                this.map.getCanvas().style.cursor = 'pointer';
-                const feature = e.features[0];
-                const props = feature.properties;
-
-                let html = '<div class="popup-title">OSM Feature</div>';
-                if (props.osm_id) {
-                    html += `<div class="popup-detail">ID: ${props.osm_id}</div>`;
-                }
-                if (props.name) {
-                    html += `<div class="popup-detail">Name: ${this.escapeHtml(props.name)}</div>`;
-                }
-                if (props.action) {
-                    html += `<div class="popup-detail">Action: ${props.action}</div>`;
-                }
-
-                popup.setLngLat(e.lngLat).setHTML(html).addTo(this.map);
-            });
-
-            this.map.on('mouseleave', layerId, () => {
-                this.map.getCanvas().style.cursor = '';
-                popup.remove();
-            });
-        });
-    }
-
-    clearOSMChaData() {
-        // Remove OSMCha layers and source
-        const layers = ['osmcha-points', 'osmcha-lines', 'osmcha-polygons-fill', 'osmcha-polygons-outline'];
-
-        layers.forEach(layerId => {
-            if (this.map.getLayer(layerId)) {
-                this.map.removeLayer(layerId);
-            }
-        });
-
-        if (this.map.getSource('osmcha-features')) {
-            this.map.removeSource('osmcha-features');
-        }
-
-        this.osmchaData = null;
-        console.log('Cleared OSMCha data from map');
     }
 
     showChangesetDetails(changeset) {
@@ -841,9 +688,6 @@ class ChangesetViewer {
         document.querySelectorAll('.changeset-item').forEach(item => {
             item.classList.remove('active');
         });
-
-        // Clear OSMCha data
-        this.clearOSMChaData();
     }
 
     fitAllChangesets() {
