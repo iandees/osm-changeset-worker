@@ -798,12 +798,12 @@ class ChangesetViewer {
         const status = changeset.open ? 'Open' : 'Closed';
         const statusClass = changeset.open ? 'status-open' : 'status-closed';
 
-        const tags = Object.entries(changeset.tags || {})
+        const tagRows = Object.entries(changeset.tags || {})
             .map(([key, value]) => `
-                <div class="tag">
-                    <span class="tag-key">${this.escapeHtml(key)}:</span>
-                    <span class="tag-value">${this.escapeHtml(value)}</span>
-                </div>
+                <tr>
+                    <td style="padding: 4px 8px; border-bottom: 1px solid #e2e8f0; font-weight: 500; color: #334155;">${this.escapeHtml(key)}</td>
+                    <td style="padding: 4px 8px; border-bottom: 1px solid #e2e8f0; color: #0f172a;">${this.escapeHtml(value)}</td>
+                </tr>
             `).join('');
 
         const panelContent = document.getElementById('panelContent');
@@ -820,37 +820,33 @@ class ChangesetViewer {
 
             <div class="panel-grid">
                 <div class="panel-section">
-                    <h3>User</h3>
                     <p>👤 ${this.escapeHtml(changeset.user_name || 'Unknown')}
                        ${changeset.user_id ? `<span style="color: #94a3b8; font-size: 0.875rem;">(ID: ${changeset.user_id})</span>` : ''}</p>
-                </div>
-
-                <div class="panel-section">
-                    <h3>Details</h3>
                     <p>📝 ${changeset.num_changes || 0} changes</p>
                     <p>💬 ${changeset.comments_count || 0} comments</p>
                     <p>📅 ${new Date(changeset.created_at).toLocaleString()}</p>
+                    <p>🚫 ${changeset.closed_at ? new Date(changeset.closed_at).toLocaleString() : '<span style="color: #94a3b8; font-size: 0.875rem;">(Still open)</span>'}</p>
                 </div>
 
-                ${this.hasBoundingBox(changeset) ? `
-                    <div class="panel-section">
-                        <h3>Bounding Box</h3>
-                        <p style="font-family: monospace; font-size: 0.875rem;">
-                            ${changeset.min_lat.toFixed(4)}, ${changeset.min_lon.toFixed(4)}<br>
-                            ${changeset.max_lat.toFixed(4)}, ${changeset.max_lon.toFixed(4)}
-                        </p>
-                    </div>
-                ` : ''}
-            </div>
-
-            ${tags ? `
-                <div class="panel-section" style="margin-top: 1rem;">
+                <div class="panel-section">
                     <h3>Tags</h3>
-                    <div class="tag-list">
-                        ${tags}
-                    </div>
+                    ${tagRows ? `
+                        <div style="overflow-x: auto;">
+                            <table style="width: 100%; border-collapse: collapse; font-size: 0.875rem; text-align: left;">
+                                <thead>
+                                    <tr style="background-color: #f1f5f9;">
+                                        <th style="padding: 8px; border-bottom: 2px solid #cbd5e1; width: 30%;">Key</th>
+                                        <th style="padding: 8px; border-bottom: 2px solid #cbd5e1;">Value</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    ${tagRows}
+                                </tbody>
+                            </table>
+                        </div>
+                    ` : '<p style="color: #64748b; font-style: italic;">No tags</p>'}
                 </div>
-            ` : ''}
+            </div>
         `;
 
         document.getElementById('changesetDetailPanel').classList.add('active');
