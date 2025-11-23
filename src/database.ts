@@ -134,13 +134,15 @@ export async function queryChangesets(
     // This returns hashes for ALL precision levels to match any indexed changeset
     const geohashes = getSearchGeohashes(minLon, minLat, maxLon, maxLat);
 
-    if (geohashes !== null && geohashes.length > 0) {
+    // D1 has a limit on SQL variables. If we have too many geohashes,
+    // we skip the index optimization to avoid "too many SQL variables" error.
+    if (geohashes !== null && geohashes.length > 0 && geohashes.length < 100) {
       // Add Geohash index filter using subquery
       const placeholders = geohashes.map(() => '?').join(',');
       query += ` AND id IN (SELECT changeset_id FROM changeset_geohashes WHERE geohash IN (${placeholders}))`;
       params.push(...geohashes);
     }
-    // If geohashes is null, it means the query area is too large for the index.
+    // If geohashes is null or too large, it means the query area is too large for the index.
     // We skip the index filter and rely on the lat/lon bounds check below.
 
     // Keep the precise bbox filter for accuracy

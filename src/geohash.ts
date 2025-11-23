@@ -43,26 +43,44 @@ export function encodeGeoHash(lat: number, lon: number, precision: number = 5): 
   return geohash;
 }
 
+function getGeohashDimensions(precision: number): { latHeight: number, lonWidth: number } {
+  const totalBits = precision * 5;
+  // Longitude bits are the even bits (0, 2, 4...), Latitude are odd (1, 3, 5...)
+  const lonBits = Math.ceil(totalBits / 2);
+  const latBits = Math.floor(totalBits / 2);
+
+  const latHeight = 180 / Math.pow(2, latBits);
+  const lonWidth = 360 / Math.pow(2, lonBits);
+
+  return { latHeight, lonWidth };
+}
+
 function getGeohashesAtPrecision(minLon: number, minLat: number, maxLon: number, maxLat: number, precision: number): string[] {
   const geohashes = new Set<string>();
-  
-  // Approximate step size in degrees for each precision to ensure coverage
-  // Prec 2: ~5.6 deg
-  // Prec 3: ~1.4 deg
-  // Prec 4: ~0.35 deg
-  // Prec 5: ~0.087 deg
-  
-  let step = 0.02;
-  if (precision === 2) step = 2.0;
-  else if (precision === 3) step = 0.5;
-  else if (precision === 4) step = 0.1;
-  else if (precision === 5) step = 0.02;
 
-  for (let lat = minLat; lat < maxLat + step; lat += step) {
-    const l = Math.min(lat, maxLat);
-    for (let lon = minLon; lon < maxLon + step; lon += step) {
-      const n = Math.min(lon, maxLon);
-      geohashes.add(encodeGeoHash(l, n, precision));
+  const { latHeight, lonWidth } = getGeohashDimensions(precision);
+
+  // Start from the center of the bottom-left cell to ensure we pick up the correct cell
+  const startLat = minLat + latHeight / 2;
+  const startLon = minLon + lonWidth / 2;
+
+  // Iterate through the bbox by stepping one cell size at a time
+  for (let lat = startLat; lat < maxLat + latHeight; lat += latHeight) {
+    // Stop if we've gone past the top edge of the bbox
+    if (lat - latHeight / 2 > maxLat) break;
+
+    for (let lon = startLon; lon < maxLon + lonWidth; lon += lonWidth) {
+      // Stop if we've gone past the right edge of the bbox
+      if (lon - lonWidth / 2 > maxLon) break;
+
+      // Clamp coordinates to valid ranges for encoding
+      const cLat = Math.min(90, Math.max(-90, lat));
+      let cLon = lon;
+      // Handle longitude wrapping if necessary (though standard bbox usually doesn't wrap)
+      if (cLon > 180) cLon -= 360;
+      if (cLon < -180) cLon += 360;
+
+      geohashes.add(encodeGeoHash(cLat, cLon, precision));
     }
   }
   return Array.from(geohashes);
@@ -72,7 +90,7 @@ function getOptimalPrecision(minLon: number, minLat: number, maxLon: number, max
   const latSpan = maxLat - minLat;
   const lonSpan = maxLon - minLon;
   const maxDim = Math.max(latSpan, lonSpan);
-  
+
   if (maxDim > 5) return 2;
   if (maxDim > 1) return 3;
   if (maxDim > 0.3) return 4;
@@ -94,13 +112,13 @@ export function getSearchGeohashes(minLon: number, minLat: number, maxLon: numbe
   // Check all precisions we support (2 to 5)
   for (let p = 2; p <= 5; p++) {
     const layerHashes = getGeohashesAtPrecision(minLon, minLat, maxLon, maxLat, p);
-    
+
     if (hashes.size + layerHashes.length > MAX_HASHES) {
       return null; // Too many hashes, fallback to non-indexed query
     }
-    
+
     layerHashes.forEach(h => hashes.add(h));
   }
-  
+
   return Array.from(hashes);
 }
