@@ -281,3 +281,74 @@ export async function getUserIdsByName(db: D1Database, userName: string): Promis
 
   return result.results?.map(r => r.user_id) || [];
 }
+
+/**
+ * Get top mappers in the last 24 hours with hourly stats
+ */
+export async function getTopMappers24h(db: D1Database, limit: number = 20) {
+  // 1. Get top mappers
+  const topMappersResult = await db.prepare(`
+    SELECT user_name
+    FROM changesets
+    WHERE created_at >= datetime('now', '-24 hours')
+    GROUP BY user_name
+    ORDER BY COUNT(*) DESC
+    LIMIT ?
+  `).bind(limit).all();
+
+  const topMappers = topMappersResult.results.map((r: any) => r.user_name);
+
+  if (topMappers.length === 0) return { topMappers: [], timeSeries: [] };
+
+  // 2. Get hourly counts for these mappers
+  const placeholders = topMappers.map(() => '?').join(',');
+  const { results } = await db.prepare(`
+    SELECT
+      user_name,
+      strftime('%Y-%m-%dT%H:00:00Z', created_at) as hour,
+      COUNT(*) as count
+    FROM changesets
+    WHERE created_at >= datetime('now', '-24 hours')
+      AND user_name IN (${placeholders})
+    GROUP BY user_name, hour
+    ORDER BY hour ASC
+  `).bind(...topMappers).all();
+
+  return { topMappers, timeSeries: results };
+}
+
+/**
+ * Get top editors in the last 24 hours with hourly stats
+ */
+export async function getTopEditors24h(db: D1Database, limit: number = 5) {
+  // 1. Get top editors
+  const topEditorsResult = await db.prepare(`
+    SELECT json_extract(tags, '$.created_by') as editor
+    FROM changesets
+    WHERE created_at >= datetime('now', '-24 hours')
+      AND json_extract(tags, '$.created_by') IS NOT NULL
+    GROUP BY editor
+    ORDER BY COUNT(*) DESC
+    LIMIT ?
+  `).bind(limit).all();
+
+  const topEditors = topEditorsResult.results.map((r: any) => r.editor);
+
+  if (topEditors.length === 0) return { topEditors: [], timeSeries: [] };
+
+  // 2. Get hourly counts
+  const placeholders = topEditors.map(() => '?').join(',');
+  const { results } = await db.prepare(`
+    SELECT
+      json_extract(tags, '$.created_by') as editor,
+      strftime('%Y-%m-%dT%H:00:00Z', created_at) as hour,
+      COUNT(*) as count
+    FROM changesets
+    WHERE created_at >= datetime('now', '-24 hours')
+      AND json_extract(tags, '$.created_by') IN (${placeholders})
+    GROUP BY editor, hour
+    ORDER BY hour ASC
+  `).bind(...topEditors).all();
+
+  return { topEditors, timeSeries: results };
+}

@@ -1,0 +1,47 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>OSM Changeset Stats (24h)</title>
+    <link rel="stylesheet" href="/style.css">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        body {
+            overflow-y: auto;
+        }
+        .stats-container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 2rem;
+        }
+        .chart-wrapper {
+            background: white;
+            border-radius: 8px;
+            padding: 1.5rem;
+            margin-bottom: 2rem;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+        }
+        h2 { margin-top: 0; color: #1e293b; }
+        .back-link { display: inline-block; margin-bottom: 1rem; color: #3b82f6; text-decoration: none; }
+        .back-link:hover { text-decoration: underline; }
+    </style>
+</head>
+<body>
+    <div class="stats-container">
+        <a href="/" class="back-link">← Back to Map</a>
+        <h1>OSM Changeset Statistics (Last 24h)</h1>
+
+        <div class="chart-wrapper">
+            <h2>Top 5 Editors</h2>
+            <canvas id="editorsChart"></canvas>
+        </div>
+
+        <div class="chart-wrapper">
+            <h2>Top 20 Mappers</h2>
+            <canvas id="mappersChart"></canvas>
+        </div>
+    </div>
+    <script src="/stats.js"></script>
+</body>
+</html>
