@@ -430,27 +430,49 @@ class ChangesetViewer {
         // Create GeoJSON features for changesets with bounding boxes
         const features = this.changesets
             .filter(cs => this.hasBoundingBox(cs))
-            .map(cs => ({
-                type: 'Feature',
-                geometry: {
-                    type: 'Polygon',
-                    coordinates: [[
-                        [cs.min_lon, cs.min_lat],
-                        [cs.max_lon, cs.min_lat],
-                        [cs.max_lon, cs.max_lat],
-                        [cs.min_lon, cs.max_lat],
-                        [cs.min_lon, cs.min_lat]
-                    ]]
-                },
-                properties: {
-                    id: cs.id,
-                    user_name: cs.user_name,
-                    num_changes: cs.num_changes,
-                    open: cs.open,
-                    comment: cs.tags?.comment || ''
-                },
-                id: cs.id // Promote ID for feature state
-            }));
+            .map(cs => {
+                // Ensure bbox has minimum size for visibility
+                let { min_lon, min_lat, max_lon, max_lat } = cs;
+                const width = max_lon - min_lon;
+                const height = max_lat - min_lat;
+
+                // If bbox is very small (e.g. single node), add padding
+                // 0.0002 degrees is roughly 20 meters, visible at high zoom
+                const minSize = 0.0002;
+
+                if (width < minSize || height < minSize) {
+                    const centerLon = (min_lon + max_lon) / 2;
+                    const centerLat = (min_lat + max_lat) / 2;
+                    const halfSize = Math.max(width, height, minSize) / 2;
+
+                    min_lon = centerLon - halfSize;
+                    max_lon = centerLon + halfSize;
+                    min_lat = centerLat - halfSize;
+                    max_lat = centerLat + halfSize;
+                }
+
+                return {
+                    type: 'Feature',
+                    geometry: {
+                        type: 'Polygon',
+                        coordinates: [[
+                            [min_lon, min_lat],
+                            [max_lon, min_lat],
+                            [max_lon, max_lat],
+                            [min_lon, max_lat],
+                            [min_lon, min_lat]
+                        ]]
+                    },
+                    properties: {
+                        id: cs.id,
+                        user_name: cs.user_name,
+                        num_changes: cs.num_changes,
+                        open: cs.open,
+                        comment: cs.tags?.comment || ''
+                    },
+                    id: cs.id // Promote ID for feature state
+                };
+            });
 
         console.log('Created', features.length, 'GeoJSON features for map');
 
