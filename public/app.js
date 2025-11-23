@@ -105,15 +105,9 @@ class ChangesetViewer {
             }
         });
 
-        // Modal
-        document.querySelector('.modal-close').addEventListener('click', () => {
-            this.closeModal();
-        });
-
-        document.getElementById('modal').addEventListener('click', (e) => {
-            if (e.target.id === 'modal') {
-                this.closeModal();
-            }
+        // Panel close
+        document.getElementById('closePanel').addEventListener('click', () => {
+            this.closePanel();
         });
 
         // Enter key on inputs
@@ -461,7 +455,8 @@ class ChangesetViewer {
                     num_changes: cs.num_changes,
                     open: cs.open,
                     comment: cs.tags?.comment || ''
-                }
+                },
+                id: cs.id // Promote ID for feature state
             }));
 
         console.log('Created', features.length, 'GeoJSON features for map');
@@ -477,7 +472,8 @@ class ChangesetViewer {
             data: {
                 type: 'FeatureCollection',
                 features: features
-            }
+            },
+            promoteId: 'id'
         });
 
         console.log('Added GeoJSON source to map');
@@ -490,11 +486,20 @@ class ChangesetViewer {
             paint: {
                 'fill-color': [
                     'case',
-                    ['get', 'open'],
-                    '#10b981',  // green for open
-                    '#2563eb'   // blue for closed
+                    ['boolean', ['feature-state', 'selected'], false],
+                    '#f59e0b', // Selected color (amber)
+                    ['case',
+                        ['get', 'open'],
+                        '#10b981',  // green for open
+                        '#2563eb'   // blue for closed
+                    ]
                 ],
-                'fill-opacity': 0.3
+                'fill-opacity': [
+                    'case',
+                    ['boolean', ['feature-state', 'selected'], false],
+                    0.6,
+                    0.3
+                ]
             }
         });
 
@@ -506,11 +511,20 @@ class ChangesetViewer {
             paint: {
                 'line-color': [
                     'case',
-                    ['get', 'open'],
-                    '#10b981',  // green for open
-                    '#2563eb'   // blue for closed
+                    ['boolean', ['feature-state', 'selected'], false],
+                    '#d97706', // Darker amber for outline
+                    ['case',
+                        ['get', 'open'],
+                        '#10b981',  // green for open
+                        '#2563eb'   // blue for closed
+                    ]
                 ],
-                'line-width': 2
+                'line-width': [
+                    'case',
+                    ['boolean', ['feature-state', 'selected'], false],
+                    3,
+                    2
+                ]
             }
         });
 
@@ -563,7 +577,23 @@ class ChangesetViewer {
     }
 
     async selectChangeset(changeset) {
+        // Deselect previous
+        if (this.selectedChangeset && this.map.getSource('changesets')) {
+            this.map.setFeatureState(
+                { source: 'changesets', id: this.selectedChangeset.id },
+                { selected: false }
+            );
+        }
+
         this.selectedChangeset = changeset;
+
+        // Select new
+        if (this.selectedChangeset && this.map.getSource('changesets')) {
+            this.map.setFeatureState(
+                { source: 'changesets', id: this.selectedChangeset.id },
+                { selected: true }
+            );
+        }
 
         // Update UI
         document.querySelectorAll('.changeset-item').forEach(item => {
@@ -572,6 +602,7 @@ class ChangesetViewer {
         const item = document.querySelector(`[data-id="${changeset.id}"]`);
         if (item) {
             item.classList.add('active');
+            item.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
         }
 
         // Zoom to changeset on map
@@ -605,12 +636,12 @@ class ChangesetViewer {
             }
 
             this.map.fitBounds(bounds, {
-                padding: 50,
+                padding: { top: 50, bottom: 300, left: 50, right: 50 }, // Add bottom padding for panel
                 maxZoom: 15
             });
         }
 
-        // Show modal with details
+        // Show panel with details
         this.showChangesetDetails(changeset);
 
         // Fetch and render OSMCha data
@@ -775,59 +806,75 @@ class ChangesetViewer {
                 </div>
             `).join('');
 
-        const modalBody = document.getElementById('modalBody');
-        modalBody.innerHTML = `
-            <div class="modal-title">
-                Changeset #${changeset.id}
+        const panelContent = document.getElementById('panelContent');
+        panelContent.innerHTML = `
+            <div class="panel-header">
+                <h2 style="margin: 0; font-size: 1.25rem;">Changeset #${changeset.id}</h2>
                 <span class="changeset-status ${statusClass}">${status}</span>
+                <a href="https://www.openstreetmap.org/changeset/${changeset.id}"
+                   target="_blank"
+                   class="btn btn-primary" style="margin-left: auto; padding: 0.25rem 0.75rem; font-size: 0.875rem;">
+                    View on OpenStreetMap ↗
+                </a>
             </div>
 
-            <div class="modal-section">
-                <h3>User</h3>
-                <p>👤 ${this.escapeHtml(changeset.user_name || 'Unknown')}
-                   ${changeset.user_id ? `(ID: ${changeset.user_id})` : ''}</p>
-            </div>
-
-            <div class="modal-section">
-                <h3>Details</h3>
-                <p>📝 ${changeset.num_changes || 0} changes</p>
-                <p>💬 ${changeset.comments_count || 0} comments</p>
-                <p>📅 Created: ${new Date(changeset.created_at).toLocaleString()}</p>
-                ${changeset.closed_at ?
-                    `<p>🔒 Closed: ${new Date(changeset.closed_at).toLocaleString()}</p>` : ''}
-            </div>
-
-            ${this.hasBoundingBox(changeset) ? `
-                <div class="modal-section">
-                    <h3>Bounding Box</h3>
-                    <p>Min: ${changeset.min_lat.toFixed(4)}, ${changeset.min_lon.toFixed(4)}</p>
-                    <p>Max: ${changeset.max_lat.toFixed(4)}, ${changeset.max_lon.toFixed(4)}</p>
+            <div class="panel-grid">
+                <div class="panel-section">
+                    <h3>User</h3>
+                    <p>👤 ${this.escapeHtml(changeset.user_name || 'Unknown')}
+                       ${changeset.user_id ? `<span style="color: #94a3b8; font-size: 0.875rem;">(ID: ${changeset.user_id})</span>` : ''}</p>
                 </div>
-            ` : ''}
+
+                <div class="panel-section">
+                    <h3>Details</h3>
+                    <p>📝 ${changeset.num_changes || 0} changes</p>
+                    <p>💬 ${changeset.comments_count || 0} comments</p>
+                    <p>📅 ${new Date(changeset.created_at).toLocaleString()}</p>
+                </div>
+
+                ${this.hasBoundingBox(changeset) ? `
+                    <div class="panel-section">
+                        <h3>Bounding Box</h3>
+                        <p style="font-family: monospace; font-size: 0.875rem;">
+                            ${changeset.min_lat.toFixed(4)}, ${changeset.min_lon.toFixed(4)}<br>
+                            ${changeset.max_lat.toFixed(4)}, ${changeset.max_lon.toFixed(4)}
+                        </p>
+                    </div>
+                ` : ''}
+            </div>
 
             ${tags ? `
-                <div class="modal-section">
+                <div class="panel-section" style="margin-top: 1rem;">
                     <h3>Tags</h3>
                     <div class="tag-list">
                         ${tags}
                     </div>
                 </div>
             ` : ''}
-
-            <div class="modal-section">
-                <a href="https://www.openstreetmap.org/changeset/${changeset.id}"
-                   target="_blank"
-                   class="btn btn-primary">
-                    View on OpenStreetMap ↗
-                </a>
-            </div>
         `;
 
-        document.getElementById('modal').classList.add('active');
+        document.getElementById('changesetDetailPanel').classList.add('active');
     }
 
-    closeModal() {
-        document.getElementById('modal').classList.remove('active');
+    closePanel() {
+        document.getElementById('changesetDetailPanel').classList.remove('active');
+
+        // Deselect on map
+        if (this.selectedChangeset && this.map.getSource('changesets')) {
+            this.map.setFeatureState(
+                { source: 'changesets', id: this.selectedChangeset.id },
+                { selected: false }
+            );
+        }
+        this.selectedChangeset = null;
+
+        // Remove active class from list
+        document.querySelectorAll('.changeset-item').forEach(item => {
+            item.classList.remove('active');
+        });
+
+        // Clear OSMCha data
+        this.clearOSMChaData();
     }
 
     fitAllChangesets() {
