@@ -641,6 +641,7 @@ class ChangesetViewer {
             <div class="panel-grid">
                 <div class="panel-section">
                     <p>👤 ${this.escapeHtml(changeset.user_name || 'Unknown')}
+                       <button class="filter-user-btn" title="Filter by this user" data-username="${this.escapeHtml(changeset.user_name || '')}" style="background: none; border: none; cursor: pointer; padding: 0 4px; font-size: 0.875rem;">🔍</button>
                        ${changeset.user_id ? `<span style="color: #94a3b8; font-size: 0.875rem;">(ID: ${changeset.user_id})</span>` : ''}</p>
                     <p>📝 ${changeset.num_changes || 0} changes</p>
                     <p>💬 ${changeset.comments_count || 0} comments</p>
@@ -668,6 +669,25 @@ class ChangesetViewer {
                 </div>
             </div>
         `;
+
+        // Add event listener for filter button
+        const filterUserBtn = panelContent.querySelector('.filter-user-btn');
+        if (filterUserBtn) {
+            filterUserBtn.addEventListener('click', (e) => {
+                e.preventDefault();
+                const username = e.target.dataset.username;
+                if (username) {
+                    document.getElementById('username').value = username;
+                    this.loadChangesets();
+
+                    // Ensure filters are visible
+                    const filtersDiv = document.querySelector('.filters');
+                    if (filtersDiv.classList.contains('collapsed')) {
+                        this.toggleFilters();
+                    }
+                }
+            });
+        }
 
         document.getElementById('changesetDetailPanel').classList.add('active');
     }
