@@ -38,7 +38,7 @@ body {
     border-right: 1px solid var(--border-color);
     display: flex;
     flex-direction: column;
-    overflow: hidden;
+    overflow-y: auto !important;
 }
 
 .sidebar-header {
@@ -294,6 +294,9 @@ body {
     overflow: hidden;
     display: flex;
     flex-direction: column;
+    flex: none !important;
+    overflow: visible !important;
+    height: auto !important;
 }
 
 .changeset-list h2 {
@@ -307,6 +310,8 @@ body {
     flex: 1;
     overflow-y: auto;
     padding: 0 1.5rem 1.5rem;
+    overflow: visible !important;
+    height: auto !important;
 }
 
 .changeset-item {

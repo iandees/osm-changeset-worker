@@ -18,7 +18,8 @@ class ChangesetViewer {
     async init() {
         this.initMap();
         this.initEventListeners();
-        await this.loadChangesets();
+        this.loadFiltersFromUrl();
+        await this.loadChangesets(true);
         this.updateFilterSummary();
     }
 
@@ -137,7 +138,7 @@ class ChangesetViewer {
         });
     }
 
-    async loadChangesets() {
+    async loadChangesets(replaceUrl = false) {
         const limit = document.getElementById('limit').value;
         const username = document.getElementById('username').value.trim();
         const tagsInput = document.getElementById('tags').value.trim();
@@ -149,33 +150,46 @@ class ChangesetViewer {
             changesetItems.innerHTML = '<div class="loading">Loading changesets...</div>';
 
             // Build query parameters
-            let url = `/api/changesets?limit=${limit}`;
+            const params = new URLSearchParams();
+            params.set('limit', limit);
+
             if (username) {
-                url += `&user_name=${encodeURIComponent(username)}`;
+                params.set('user_name', username);
             }
 
             // Add bounding box filter if set
             if (this.bboxFilter) {
                 const { minLon, minLat, maxLon, maxLat } = this.bboxFilter;
-                url += `&bbox=${minLon},${minLat},${maxLon},${maxLat}`;
+                const f = (n) => n.toFixed(5);
+                params.set('bbox', `${f(minLon)},${f(minLat)},${f(maxLon)},${f(maxLat)}`);
             }
 
             // Add bbox size filters
             if (bboxSizeMin) {
-                url += `&bbox_size_min=${encodeURIComponent(bboxSizeMin)}`;
+                params.set('bbox_size_min', bboxSizeMin);
             }
             if (bboxSizeMax) {
-                url += `&bbox_size_max=${encodeURIComponent(bboxSizeMax)}`;
+                params.set('bbox_size_max', bboxSizeMax);
             }
 
             // Parse tags input - format: key=value or key="value with spaces"
             if (tagsInput) {
                 const tagPairs = this.parseTagsInput(tagsInput);
                 tagPairs.forEach(pair => {
-                    url += `&tags=${encodeURIComponent(pair)}`;
+                    params.append('tags', pair);
                 });
             }
 
+            // Update Browser URL
+            const queryString = params.toString();
+            const newUrl = `${window.location.pathname}?${queryString}`;
+            if (replaceUrl) {
+                window.history.replaceState({}, '', newUrl);
+            } else {
+                window.history.pushState({}, '', newUrl);
+            }
+
+            const url = `/api/changesets?${queryString}`;
             console.log('Fetching from:', url);
             const response = await fetch(url);
 
@@ -228,6 +242,52 @@ class ChangesetViewer {
             this.changesets = [];
             document.getElementById('changesetItems').innerHTML =
                 '<div class="error">Failed to load changesets. Please try again.</div>';
+        }
+    }
+
+    loadFiltersFromUrl() {
+        const params = new URLSearchParams(window.location.search);
+
+        if (params.has('user_name')) {
+            document.getElementById('username').value = params.get('user_name');
+        }
+
+        if (params.has('tags')) {
+            const tags = params.getAll('tags');
+            const formattedTags = tags.map(tag => {
+                const parts = tag.split('=');
+                if (parts.length >= 2) {
+                    const key = parts[0];
+                    const value = parts.slice(1).join('=');
+                    if (value.includes(' ')) {
+                        return `${key}="${value}"`;
+                    }
+                }
+                return tag;
+            });
+            document.getElementById('tags').value = formattedTags.join(' ');
+        }
+
+        if (params.has('bbox')) {
+            const bboxParts = params.get('bbox').split(',');
+            if (bboxParts.length === 4) {
+                const [minLon, minLat, maxLon, maxLat] = bboxParts.map(parseFloat);
+                if (!isNaN(minLon) && !isNaN(minLat) && !isNaN(maxLon) && !isNaN(maxLat)) {
+                    this.setBboxFilter(minLon, minLat, maxLon, maxLat);
+                }
+            }
+        }
+
+        if (params.has('bbox_size_min')) {
+            document.getElementById('bboxSizeMin').value = params.get('bbox_size_min');
+        }
+
+        if (params.has('bbox_size_max')) {
+            document.getElementById('bboxSizeMax').value = params.get('bbox_size_max');
+        }
+
+        if (params.has('limit')) {
+            document.getElementById('limit').value = params.get('limit');
         }
     }
 
@@ -995,6 +1055,8 @@ class ChangesetViewer {
         // Render bbox on map
         this.renderBboxOnMap();
 
+        this.updateFilterSummary();
+
         console.log('Bbox filter set:', this.bboxFilter);
     }
 
@@ -1009,6 +1071,7 @@ class ChangesetViewer {
             this.updateBboxDisplay();
             this.renderBboxOnMap();
             document.getElementById('clearBbox').style.display = 'block';
+            this.updateFilterSummary();
         }
     }
 
@@ -1025,6 +1088,14 @@ class ChangesetViewer {
 
     renderBboxOnMap() {
         // Remove old bbox layer
+        if (!this.map) return;
+
+        // Wait for map style to load before adding sources/layers
+        if (!this.map.loaded()) {
+            this.map.once('load', () => this.renderBboxOnMap());
+            return;
+        }
+
         if (this.map.getLayer('bbox-filter-outline')) {
             this.map.removeLayer('bbox-filter-outline');
         }
