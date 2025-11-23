@@ -1,5 +1,6 @@
 // Database operations for changesets
 import type { Changeset, ReplicationState } from './types';
+import { getCoveringGeohashes, getSearchGeohashes } from './geohash';
 
 /**
  * Get the current replication state from database
@@ -60,79 +61,37 @@ export async function storeChangeset(db: D1Database, changeset: Changeset): Prom
 /**
  * Store multiple changesets in a batch
  */
-export async function storeChangesets(db: D1Database, changesets: Changeset[]): Promise<void> {
-  if (changesets.length === 0) {
-    return;
-  }
+export async function storeChangesets(db: D1Database, changesets: any[]) {
+  // Insert changesets
+  const stmt = db.prepare(`
+    INSERT OR IGNORE INTO changesets (
+      id, created_at, closed_at, min_lat, min_lon, max_lat, max_lon,
+      user_id, user_name, num_changes, comments_count, tags
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+  `);
 
-  // Use batch operations for better performance
-  const statements: D1PreparedStatement[] = [];
+  const batch = changesets.map(cs => stmt.bind(
+    cs.id, cs.created_at, cs.closed_at,
+    cs.min_lat, cs.min_lon, cs.max_lat, cs.max_lon,
+    cs.user_id, cs.user_name, cs.num_changes, cs.comments_count,
+    JSON.stringify(cs.tags)
+  ));
 
-  // Track unique user_id/user_name pairs to update with their most recent timestamp
-  const userMappings = new Map<string, { userId: number; userName: string; timestamp: string }>();
+  // Insert Geohashes into index table
+  const geohashStmt = db.prepare(`
+    INSERT OR IGNORE INTO changeset_geohashes (changeset_id, geohash) VALUES (?, ?)
+  `);
 
-  for (const changeset of changesets) {
-    // Serialize tags to JSON
-    const tagsJson = changeset.tags && Object.keys(changeset.tags).length > 0
-      ? JSON.stringify(changeset.tags)
-      : null;
-
-    statements.push(
-      db.prepare(`
-        INSERT OR REPLACE INTO changesets (
-          id, created_at, closed_at, open, user_id, user_name,
-          min_lat, max_lat, min_lon, max_lon, num_changes, comments_count, tags
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-      `).bind(
-        changeset.id,
-        changeset.created_at,
-        changeset.closed_at || null,
-        changeset.open ? 1 : 0,
-        changeset.user_id || null,
-        changeset.user_name || null,
-        changeset.min_lat || null,
-        changeset.max_lat || null,
-        changeset.min_lon || null,
-        changeset.max_lon || null,
-        changeset.num_changes || 0,
-        changeset.comments_count || 0,
-        tagsJson
-      )
-    );
-
-    // Track user_id/user_name mapping with changeset timestamp
-    if (changeset.user_id && changeset.user_name) {
-      const key = `${changeset.user_id}:${changeset.user_name}`;
-      const existing = userMappings.get(key);
-      // Keep the latest timestamp for each user_id/user_name pair
-      if (!existing || changeset.created_at > existing.timestamp) {
-        userMappings.set(key, {
-          userId: changeset.user_id,
-          userName: changeset.user_name,
-          timestamp: changeset.created_at
-        });
-      }
+  const geohashBatch: any[] = [];
+  changesets.forEach(cs => {
+    if (cs.geohashes && Array.isArray(cs.geohashes)) {
+      cs.geohashes.forEach((hash: string) => {
+        geohashBatch.push(geohashStmt.bind(cs.id, hash));
+      });
     }
-  }
+  });
 
-  // Add user_name tracking statements
-  // Using INSERT OR REPLACE to handle both new and existing mappings
-  for (const { userId, userName, timestamp } of userMappings.values()) {
-    statements.push(
-      db.prepare(`
-        INSERT INTO user_names (user_id, user_name, first_seen, last_seen)
-        VALUES (?, ?, ?, ?)
-        ON CONFLICT(user_id, user_name)
-        DO UPDATE SET last_seen = CASE
-          WHEN excluded.last_seen > last_seen THEN excluded.last_seen
-          ELSE last_seen
-        END
-      `).bind(userId, userName, timestamp, timestamp)
-    );
-  }
-
-  // Execute all statements in a batch
-  await db.batch(statements);
+  await db.batch([...batch, ...geohashBatch]);
 }
 
 /**
@@ -140,122 +99,102 @@ export async function storeChangesets(db: D1Database, changesets: Changeset[]): 
  */
 export async function queryChangesets(
   db: D1Database,
-  filters: {
-    userId?: number;
-    userName?: string;
-    startDate?: string;
-    endDate?: string;
-    bbox?: { minLat: number; maxLat: number; minLon: number; maxLon: number };
-    bboxSizeMin?: number;
-    bboxSizeMax?: number;
-    tags?: Record<string, string>;
-    limit?: number;
-    offset?: number;
-  }
-): Promise<Changeset[]> {
-  let query = `
-    SELECT c.* FROM changesets c
-    WHERE 1=1
-  `;
-  const bindings: (string | number)[] = [];
+  filters: any
+) {
+  let query = 'SELECT * FROM changesets WHERE 1=1';
+  const params: any[] = [];
 
   if (filters.userId) {
-    query += ' AND c.user_id = ?';
-    bindings.push(filters.userId);
+    query += ' AND user_id = ?';
+    params.push(filters.userId);
   }
 
   // Filter by username - lookup user_ids from user_names table
   if (filters.userName) {
-    query += ` AND c.user_id IN (
+    query += ` AND user_id IN (
       SELECT DISTINCT user_id FROM user_names WHERE user_name = ?
     )`;
-    bindings.push(filters.userName);
+    params.push(filters.userName);
   }
 
   if (filters.startDate) {
-    query += ' AND c.created_at >= ?';
-    bindings.push(filters.startDate);
+    query += ' AND created_at >= ?';
+    params.push(filters.startDate);
   }
 
   if (filters.endDate) {
-    query += ' AND c.created_at <= ?';
-    bindings.push(filters.endDate);
+    query += ' AND created_at <= ?';
+    params.push(filters.endDate);
   }
 
   if (filters.bbox) {
-    query += ` AND c.min_lat IS NOT NULL
-               AND c.max_lat IS NOT NULL
-               AND c.min_lon IS NOT NULL
-               AND c.max_lon IS NOT NULL
-               AND c.max_lat >= ?
-               AND c.min_lat <= ?
-               AND c.max_lon >= ?
-               AND c.min_lon <= ?`;
-    bindings.push(
-      filters.bbox.minLat,
-      filters.bbox.maxLat,
-      filters.bbox.minLon,
-      filters.bbox.maxLon
-    );
+    const { minLon, minLat, maxLon, maxLat } = filters.bbox;
+
+    // Calculate Geohashes that cover this bbox for searching
+    // This returns hashes for ALL precision levels to match any indexed changeset
+    const geohashes = getSearchGeohashes(minLon, minLat, maxLon, maxLat);
+
+    if (geohashes !== null && geohashes.length > 0) {
+      // Add Geohash index filter using subquery
+      const placeholders = geohashes.map(() => '?').join(',');
+      query += ` AND id IN (SELECT changeset_id FROM changeset_geohashes WHERE geohash IN (${placeholders}))`;
+      params.push(...geohashes);
+    }
+    // If geohashes is null, it means the query area is too large for the index.
+    // We skip the index filter and rely on the lat/lon bounds check below.
+
+    // Keep the precise bbox filter for accuracy
+    query += ' AND min_lat >= ? AND max_lat <= ? AND min_lon >= ? AND max_lon <= ?';
+    params.push(minLat, maxLat, minLon, maxLon);
   }
 
   // Filter by bbox size (area in square degrees)
   if (filters.bboxSizeMin !== undefined || filters.bboxSizeMax !== undefined) {
-    query += ` AND c.min_lat IS NOT NULL
-               AND c.max_lat IS NOT NULL
-               AND c.min_lon IS NOT NULL
-               AND c.max_lon IS NOT NULL`;
+    query += ` AND min_lat IS NOT NULL
+               AND max_lat IS NOT NULL
+               AND min_lon IS NOT NULL
+               AND max_lon IS NOT NULL`;
 
     if (filters.bboxSizeMin !== undefined) {
-      query += ` AND ((c.max_lon - c.min_lon) * (c.max_lat - c.min_lat)) >= ?`;
-      bindings.push(filters.bboxSizeMin);
+      query += ` AND ((max_lon - min_lon) * (max_lat - min_lat)) >= ?`;
+      params.push(filters.bboxSizeMin);
     }
 
     if (filters.bboxSizeMax !== undefined) {
-      query += ` AND ((c.max_lon - c.min_lon) * (c.max_lat - c.min_lat)) <= ?`;
-      bindings.push(filters.bboxSizeMax);
+      query += ` AND ((max_lon - min_lon) * (max_lat - min_lat)) <= ?`;
+      params.push(filters.bboxSizeMax);
     }
   }
 
   // Filter by tags using SQLite JSON functions
   if (filters.tags && Object.keys(filters.tags).length > 0) {
     for (const [key, value] of Object.entries(filters.tags)) {
-      query += ` AND json_extract(c.tags, ?) = ?`;
-      bindings.push(`$.${key}`, value);
+      query += ` AND json_extract(tags, ?) = ?`;
+      params.push(`$.${key}`, value);
     }
   }
 
-  query += ' ORDER BY c.created_at DESC';
+  query += ' ORDER BY created_at DESC';
 
   if (filters.limit) {
     query += ' LIMIT ?';
-    bindings.push(filters.limit);
+    params.push(filters.limit);
   }
 
   if (filters.offset) {
     query += ' OFFSET ?';
-    bindings.push(filters.offset);
+    params.push(filters.offset);
   }
 
-  const stmt = db.prepare(query);
-  const result = await stmt.bind(...bindings).all<Changeset & { tags: string | null }>();
+  const stmt = db.prepare(query).bind(...params);
+  const { results } = await stmt.all();
 
-  // Parse JSON tags for each result
-  return (result.results || []).map(cs => {
-    const changeset = { ...cs };
-    if (changeset.tags && typeof changeset.tags === 'string') {
-      try {
-        changeset.tags = JSON.parse(changeset.tags);
-      } catch (e) {
-        changeset.tags = {};
-      }
-    } else {
-      changeset.tags = {};
-    }
-    // Convert open from integer to boolean
-    changeset.open = !!(changeset.open as any);
-    return changeset as Changeset;
-  });
+  // Parse tags JSON
+  return results.map((row: any) => ({
+    ...row,
+    tags: row.tags ? JSON.parse(row.tags) : {},
+    open: Boolean(row.closed_at === null) // Assuming closed_at is null for open changesets
+  }));
 }
 
 /**

@@ -13,6 +13,7 @@ import {
   updateReplicationState,
   storeChangesets
 } from './database';
+import { getCoveringGeohashes } from './geohash';
 
 const app = new Hono<{ Bindings: Env }>();
 
@@ -92,11 +93,33 @@ async function handleScheduled(env: Env, ctx: ExecutionContext): Promise<void> {
       // Fetch and parse changesets
       const changesets = await fetchChangesets(nextSequence);
 
+      // Enrich changesets with Geohashes for indexing
+      const changesetsWithGeohash = changesets.map(cs => {
+        const hasBbox =
+          cs.min_lon !== undefined && cs.min_lon !== null &&
+          cs.min_lat !== undefined && cs.min_lat !== null &&
+          cs.max_lon !== undefined && cs.max_lon !== null &&
+          cs.max_lat !== undefined && cs.max_lat !== null;
+
+        return {
+          ...cs,
+          // Ensure undefined values are converted to null for D1
+          min_lon: cs.min_lon ?? null,
+          min_lat: cs.min_lat ?? null,
+          max_lon: cs.max_lon ?? null,
+          max_lat: cs.max_lat ?? null,
+          closed_at: cs.closed_at ?? null,
+          geohashes: hasBbox
+            ? getCoveringGeohashes(cs.min_lon, cs.min_lat, cs.max_lon, cs.max_lat)
+            : []
+        };
+      });
+
       console.log(`Found ${changesets.length} changesets`);
 
       if (changesets.length > 0) {
         // Store changesets in database
-        await storeChangesets(env.DB, changesets);
+        await storeChangesets(env.DB, changesetsWithGeohash);
         console.log(`Stored ${changesets.length} changesets`);
       }
 
