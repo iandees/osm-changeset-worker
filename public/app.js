@@ -1173,6 +1173,9 @@ class ChangesetViewer {
         const maxLat = Math.max(start.lat, end.lat);
 
         // Remove old preview layer
+        if (this.map.getLayer('bbox-preview-outline')) {
+            this.map.removeLayer('bbox-preview-outline');
+        }
         if (this.map.getLayer('bbox-preview')) {
             this.map.removeLayer('bbox-preview');
         }
@@ -1348,6 +1351,7 @@ class ChangesetViewer {
             return;
         }
 
+        // Clean up existing layers
         if (this.map.getLayer('bbox-filter-outline')) {
             this.map.removeLayer('bbox-filter-outline');
         }
@@ -1357,12 +1361,55 @@ class ChangesetViewer {
         if (this.map.getSource('bbox-filter')) {
             this.map.removeSource('bbox-filter');
         }
+        if (this.map.getLayer('bbox-mask')) {
+            this.map.removeLayer('bbox-mask');
+        }
+        if (this.map.getSource('bbox-mask')) {
+            this.map.removeSource('bbox-mask');
+        }
 
         if (!this.bboxFilter) return;
 
         const { minLon, minLat, maxLon, maxLat } = this.bboxFilter;
 
-        // Add bbox layer
+        // Add mask layer (darken outside)
+        this.map.addSource('bbox-mask', {
+            type: 'geojson',
+            data: {
+                type: 'Feature',
+                geometry: {
+                    type: 'Polygon',
+                    coordinates: [
+                        [ // World boundary (CCW)
+                            [-180, -90],
+                            [180, -90],
+                            [180, 90],
+                            [-180, 90],
+                            [-180, -90]
+                        ],
+                        [ // Hole (BBox) - CW
+                            [minLon, minLat],
+                            [minLon, maxLat],
+                            [maxLon, maxLat],
+                            [maxLon, minLat],
+                            [minLon, minLat]
+                        ]
+                    ]
+                }
+            }
+        });
+
+        this.map.addLayer({
+            id: 'bbox-mask',
+            type: 'fill',
+            source: 'bbox-mask',
+            paint: {
+                'fill-color': '#000000',
+                'fill-opacity': 0.5
+            }
+        });
+
+        // Add bbox outline layer
         this.map.addSource('bbox-filter', {
             type: 'geojson',
             data: {
@@ -1381,22 +1428,13 @@ class ChangesetViewer {
         });
 
         this.map.addLayer({
-            id: 'bbox-filter',
-            type: 'fill',
-            source: 'bbox-filter',
-            paint: {
-                'fill-color': '#f59e0b',
-                'fill-opacity': 0.1
-            }
-        });
-
-        this.map.addLayer({
             id: 'bbox-filter-outline',
             type: 'line',
             source: 'bbox-filter',
             paint: {
-                'line-color': '#f59e0b',
-                'line-width': 3
+                'line-color': '#ef4444',
+                'line-width': 2,
+                'line-dasharray': [2, 2]
             }
         });
     }
@@ -1425,6 +1463,12 @@ class ChangesetViewer {
         }
         if (this.map.getSource('bbox-filter')) {
             this.map.removeSource('bbox-filter');
+        }
+        if (this.map.getLayer('bbox-mask')) {
+            this.map.removeLayer('bbox-mask');
+        }
+        if (this.map.getSource('bbox-mask')) {
+            this.map.removeSource('bbox-mask');
         }
 
         // Update filter summary
