@@ -80,6 +80,10 @@ class ChangesetViewer {
             this.toggleBboxDrawing();
         });
 
+        document.getElementById('useMapBounds').addEventListener('click', () => {
+            this.setBboxFromMap();
+        });
+
         document.getElementById('clearBbox').addEventListener('click', () => {
             this.clearBboxFilter();
         });
@@ -1271,6 +1275,18 @@ class ChangesetViewer {
         }
 
         console.log('Bbox drawing mode cancelled');
+    }
+
+    setBboxFromMap() {
+        if (!this.map) return;
+
+        const bounds = this.map.getBounds();
+        const minLon = bounds.getWest();
+        const minLat = bounds.getSouth();
+        const maxLon = bounds.getEast();
+        const maxLat = bounds.getNorth();
+
+        this.setBboxFilter(minLon, minLat, maxLon, maxLat);
     }
 
     setBboxFilter(minLon, minLat, maxLon, maxLat) {
