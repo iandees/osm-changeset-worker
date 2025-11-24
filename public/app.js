@@ -174,6 +174,15 @@ class ChangesetViewer {
                 });
             }
 
+            // Update RSS Link
+            const rssParams = new URLSearchParams(params);
+            const rssLink = document.getElementById('rssLink');
+            if (rssLink) {
+                const protocol = window.location.protocol;
+                const host = window.location.host;
+                rssLink.href = `${protocol}//${host}/api/changesets.rss?${rssParams.toString()}`;
+            }
+
             // Update Browser URL
             const queryString = params.toString();
             const newUrl = `${window.location.pathname}?${queryString}`;

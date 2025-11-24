@@ -33,6 +33,45 @@ api.use('/*', cors());
  * - offset: Offset for pagination (default: 0)
  */
 api.get('/changesets', async (c) => {
+  try {
+    const filters = getFiltersFromContext(c);
+    const changesets = await queryChangesets(c.env.DB, filters);
+
+    return c.json({
+      type: 'FeatureCollection',
+      features: changesets.map(changesetToFeature)
+    });
+  } catch (error: any) {
+    if (error.message && error.message.startsWith('Invalid')) {
+      return c.json({ error: error.message }, 400);
+    }
+    console.error('Error querying changesets:', error);
+    return c.json({ error: 'Failed to query changesets' }, 500);
+  }
+});
+
+/**
+ * GET /api/changesets.rss - List changesets as RSS feed
+ */
+api.get('/changesets.rss', async (c) => {
+  try {
+    const filters = getFiltersFromContext(c);
+    const changesets = await queryChangesets(c.env.DB, filters);
+    const rss = generateRss(changesets);
+
+    return c.text(rss, 200, {
+      'Content-Type': 'application/rss+xml'
+    });
+  } catch (error: any) {
+    if (error.message && error.message.startsWith('Invalid')) {
+      return c.text(error.message, 400);
+    }
+    console.error('Error querying changesets for RSS:', error);
+    return c.text('Failed to query changesets', 500);
+  }
+});
+
+function getFiltersFromContext(c: any) {
   const userId = c.req.query('user_id');
   const userName = c.req.query('user_name');
   const startDate = c.req.query('start_date');
@@ -44,37 +83,15 @@ api.get('/changesets', async (c) => {
   const limitStr = c.req.query('limit');
   const offsetStr = c.req.query('offset');
 
-  const filters: {
-    userId?: number;
-    userName?: string;
-    startDate?: string;
-    endDate?: string;
-    bbox?: { minLat: number; maxLat: number; minLon: number; maxLon: number };
-    bboxSizeMin?: number;
-    bboxSizeMax?: number;
-    tags?: Record<string, string>;
-    limit?: number;
-    offset?: number;
-  } = {
+  const filters: any = {
     limit: limitStr ? parseInt(limitStr) : 100,
     offset: offsetStr ? parseInt(offsetStr) : 0
   };
 
-  if (userId) {
-    filters.userId = parseInt(userId);
-  }
-
-  if (userName) {
-    filters.userName = userName;
-  }
-
-  if (startDate) {
-    filters.startDate = startDate;
-  }
-
-  if (endDate) {
-    filters.endDate = endDate;
-  }
+  if (userId) filters.userId = parseInt(userId);
+  if (userName) filters.userName = userName;
+  if (startDate) filters.startDate = startDate;
+  if (endDate) filters.endDate = endDate;
 
   if (bboxStr) {
     const [minLon, minLat, maxLon, maxLat] = bboxStr.split(',').map(parseFloat);
@@ -83,32 +100,25 @@ api.get('/changesets', async (c) => {
       if (validateBbox(bbox)) {
         filters.bbox = bbox;
       } else {
-        return c.json({ error: 'Invalid bounding box coordinates' }, 400);
+        throw new Error('Invalid bounding box coordinates');
       }
     } else {
-      return c.json({ error: 'Invalid bounding box format' }, 400);
+      throw new Error('Invalid bounding box format');
     }
   }
 
   if (bboxSizeMinStr) {
-    const bboxSizeMin = parseFloat(bboxSizeMinStr);
-    if (!isNaN(bboxSizeMin) && bboxSizeMin >= 0) {
-      filters.bboxSizeMin = bboxSizeMin;
-    } else {
-      return c.json({ error: 'Invalid bbox_size_min value' }, 400);
-    }
+    const val = parseFloat(bboxSizeMinStr);
+    if (!isNaN(val) && val >= 0) filters.bboxSizeMin = val;
+    else throw new Error('Invalid bbox_size_min value');
   }
 
   if (bboxSizeMaxStr) {
-    const bboxSizeMax = parseFloat(bboxSizeMaxStr);
-    if (!isNaN(bboxSizeMax) && bboxSizeMax >= 0) {
-      filters.bboxSizeMax = bboxSizeMax;
-    } else {
-      return c.json({ error: 'Invalid bbox_size_max value' }, 400);
-    }
+    const val = parseFloat(bboxSizeMaxStr);
+    if (!isNaN(val) && val >= 0) filters.bboxSizeMax = val;
+    else throw new Error('Invalid bbox_size_max value');
   }
 
-  // Parse tags filter - format: key=value
   if (tagsParams && tagsParams.length > 0) {
     filters.tags = {};
     for (const tagParam of tagsParams) {
@@ -116,25 +126,13 @@ api.get('/changesets', async (c) => {
       if (key && value !== undefined) {
         filters.tags[key] = value;
       } else {
-        return c.json({ error: 'Invalid tag format. Use: tags=key=value' }, 400);
+        throw new Error('Invalid tag format. Use: tags=key=value');
       }
     }
   }
 
-  try {
-    const changesets = await queryChangesets(c.env.DB, filters);
-
-    // Tags are already parsed from JSON in queryChangesets
-    // Convert open from integer to boolean (already done in queryChangesets)
-    return c.json({
-      type: 'FeatureCollection',
-      features: changesets.map(changesetToFeature)
-    });
-  } catch (error) {
-    console.error('Error querying changesets:', error);
-    return c.json({ error: 'Failed to query changesets' }, 500);
-  }
-});
+  return filters;
+}
 
 /**
  * GET /api/changesets/:id - Get a single changeset by ID
@@ -361,6 +359,46 @@ function convertAdiffToGeoJSON(xmlData: string) {
     type: "FeatureCollection",
     features: features
   };
+}
+
+function generateRss(changesets: any[]): string {
+  const items = changesets.map(cs => {
+    const title = `Changeset ${cs.id} by ${cs.user_name}`;
+    const link = `https://www.openstreetmap.org/changeset/${cs.id}`;
+    const date = new Date(cs.created_at).toUTCString();
+    const comment = cs.tags?.comment || '(no comment)';
+
+    let description = `<p><strong>User:</strong> ${cs.user_name}</p>`;
+    description += `<p><strong>Comment:</strong> ${comment}</p>`;
+    description += `<p><strong>Changes:</strong> ${cs.num_changes}</p>`;
+    if (cs.tags && Object.keys(cs.tags).length > 0) {
+      description += `<p><strong>Tags:</strong></p><ul>`;
+      for (const [k, v] of Object.entries(cs.tags)) {
+        description += `<li>${k}: ${v}</li>`;
+      }
+      description += `</ul>`;
+    }
+
+    return `    <item>
+      <title><![CDATA[${title}]]></title>
+      <link>${link}</link>
+      <guid isPermaLink="true">${link}</guid>
+      <pubDate>${date}</pubDate>
+      <description><![CDATA[${description}]]></description>
+    </item>`;
+  }).join('\n');
+
+  return `<?xml version="1.0" encoding="UTF-8" ?>
+<rss version="2.0">
+  <channel>
+    <title>OSM Changeset Feed</title>
+    <description>Recent OSM changesets</description>
+    <link>https://www.openstreetmap.org</link>
+    <lastBuildDate>${new Date().toUTCString()}</lastBuildDate>
+    <pubDate>${new Date().toUTCString()}</pubDate>
+${items}
+  </channel>
+</rss>`;
 }
 
 function extractFeatures(container: any, features: any[], actionType: string, version: string) {

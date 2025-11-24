@@ -25,7 +25,6 @@
                         <span class="toggle-icon">▼</span>
                     </button>
                 </div>
-
                 <div class="filters-content" id="filtersContent">
                     <div class="filter-group">
                         <label for="username">Username</label>
@@ -81,7 +80,10 @@
 
             <!-- Changeset List -->
             <div class="changeset-list">
-                <h2 id="changesetListHeader">Changesets</h2>
+                <div style="display: flex; align-items: center; margin-bottom: 10px;">
+                    <h2 id="changesetListHeader" style="margin: 0;">Changesets</h2>
+                    <a id="rssLink" href="#" target="_blank" title="RSS Feed" style="margin-left: 8px; text-decoration: none; font-size: 1.2rem;">📡</a>
+                </div>
                 <div id="changesetItems" class="changeset-items">
                     <div class="loading">Loading changesets...</div>
                 </div>
