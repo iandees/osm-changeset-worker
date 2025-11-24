@@ -305,6 +305,7 @@ class ChangesetViewer {
         //   created_by="iD 2.37.3"      ->  ["created_by=iD 2.37.3"]
         //   comment=test key="value with spaces" other=simple  ->  ["comment=test", "key=value with spaces", "other=simple"]
         //   key!=value                  ->  ["key!=value"]
+        //   key~value                   ->  ["key~value"]
 
         const pairs = [];
         let current = '';
@@ -330,8 +331,8 @@ class ChangesetViewer {
             pairs.push(current.trim());
         }
 
-        // Filter out any that don't have a valid operator (=, !=)
-        return pairs.filter(pair => pair.includes('='));
+        // Filter out any that don't have a valid operator (=, !=, ~)
+        return pairs.filter(pair => pair.includes('=') || pair.includes('~'));
     }
 
     applyFilters() {
