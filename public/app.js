@@ -9,6 +9,7 @@ class ChangesetViewer {
         this.bboxDrawing = false; // Track if we're in bbox drawing mode
         this.bboxDrawStart = null; // Starting point for bbox drawing
         this.bboxDrawLayer = null; // Layer for drawing bbox preview
+        this.adiffActive = false; // Track if adiff is loaded
 
         this.init();
     }
@@ -511,6 +512,8 @@ class ChangesetViewer {
                 ],
                 'fill-opacity': [
                     'case',
+                    ['boolean', ['feature-state', 'adiffLoaded'], false],
+                    0, // Transparent if adiff loaded
                     ['boolean', ['feature-state', 'selected'], false],
                     0.6,
                     0.3
@@ -539,6 +542,12 @@ class ChangesetViewer {
                     ['boolean', ['feature-state', 'selected'], false],
                     3,
                     2
+                ],
+                'line-opacity': [
+                    'case',
+                    ['boolean', ['feature-state', 'adiffLoaded'], false],
+                    0, // Hide original outline if adiff loaded
+                    1
                 ]
             }
         });
@@ -547,6 +556,8 @@ class ChangesetViewer {
 
         // Add click handler
         this.map.on('click', 'changesets-fill', (e) => {
+            if (this.adiffActive) return;
+
             const feature = e.features[0];
             const changesetId = feature.properties.id;
             const changeset = this.changesets.find(cs => cs.id === changesetId);
@@ -574,6 +585,9 @@ class ChangesetViewer {
                 { selected: false }
             );
         }
+
+        // Clear previous adiff visualization
+        this.clearAdiff();
 
         this.selectedChangeset = changeset;
 
@@ -634,6 +648,236 @@ class ChangesetViewer {
 
         // Show panel with details
         this.showChangesetDetails(changeset);
+
+        // Load and render adiff
+        this.loadAdiff(changeset.id);
+    }
+
+    async loadAdiff(changesetId) {
+        try {
+            const response = await fetch(`/api/changesets/${changesetId}/adiff`);
+            if (!response.ok) {
+                console.warn('Failed to fetch adiff');
+                return;
+            }
+            const geojson = await response.json();
+            this.renderAdiff(geojson);
+        } catch (error) {
+            console.error('Error loading adiff:', error);
+        }
+    }
+
+    renderAdiff(geojson) {
+        if (!this.map) return;
+
+        this.adiffActive = true;
+
+        // Set feature state to hide fill/outline of selected changeset
+        if (this.selectedChangeset && this.map.getSource('changesets')) {
+            this.map.setFeatureState(
+                { source: 'changesets', id: this.selectedChangeset.id },
+                { selected: true, adiffLoaded: true }
+            );
+        }
+
+        // Add source
+        this.map.addSource('adiff', {
+            type: 'geojson',
+            data: geojson
+        });
+
+        // Add line layer
+        this.map.addLayer({
+            id: 'adiff-lines',
+            type: 'line',
+            source: 'adiff',
+            filter: ['==', ['geometry-type'], 'LineString'],
+            paint: {
+                'line-width': 4,
+                'line-color': [
+                    'match',
+                    ['get', 'changeType'],
+                    'create', '#10b981', // Green
+                    'delete', '#ef4444', // Red
+                    'modify', [
+                        'match',
+                        ['get', 'version'],
+                        'new', '#3b82f6', // Blue
+                        '#f59e0b' // Orange
+                    ],
+                    '#888888' // Default
+                ],
+                'line-opacity': 0.8
+            }
+        });
+
+        // Add point layer
+        this.map.addLayer({
+            id: 'adiff-points',
+            type: 'circle',
+            source: 'adiff',
+            filter: ['==', ['geometry-type'], 'Point'],
+            paint: {
+                'circle-radius': 5,
+                'circle-color': [
+                    'match',
+                    ['get', 'changeType'],
+                    'create', '#10b981',
+                    'delete', '#ef4444',
+                    'modify', [
+                        'match',
+                        ['get', 'version'],
+                        'new', '#3b82f6',
+                        '#f59e0b'
+                    ],
+                    '#888888'
+                ],
+                'circle-stroke-width': 1,
+                'circle-stroke-color': '#ffffff'
+            }
+        });
+
+        // Add click handlers for popups
+        this._boundOnAdiffClick = this.onAdiffFeatureClick.bind(this);
+        this.map.on('click', 'adiff-lines', this._boundOnAdiffClick);
+        this.map.on('click', 'adiff-points', this._boundOnAdiffClick);
+
+        // Cursor handling
+        this.map.on('mouseenter', 'adiff-lines', () => this.map.getCanvas().style.cursor = 'pointer');
+        this.map.on('mouseleave', 'adiff-lines', () => this.map.getCanvas().style.cursor = '');
+        this.map.on('mouseenter', 'adiff-points', () => this.map.getCanvas().style.cursor = 'pointer');
+        this.map.on('mouseleave', 'adiff-points', () => this.map.getCanvas().style.cursor = '');
+
+        // Add dotted bbox for selected changeset
+        if (this.selectedChangeset && this.hasBoundingBox(this.selectedChangeset)) {
+            const cs = this.selectedChangeset;
+            let { min_lon, min_lat, max_lon, max_lat } = cs;
+            const width = max_lon - min_lon;
+            const height = max_lat - min_lat;
+            const minSize = 0.0002;
+
+            if (width < minSize || height < minSize) {
+                const centerLon = (min_lon + max_lon) / 2;
+                const centerLat = (min_lat + max_lat) / 2;
+                const halfSize = Math.max(width, height, minSize) / 2;
+                min_lon = centerLon - halfSize;
+                max_lon = centerLon + halfSize;
+                min_lat = centerLat - halfSize;
+                max_lat = centerLat + halfSize;
+            }
+
+            this.map.addSource('selected-bbox', {
+                type: 'geojson',
+                data: {
+                    type: 'Feature',
+                    geometry: {
+                        type: 'Polygon',
+                        coordinates: [[
+                            [min_lon, min_lat],
+                            [max_lon, min_lat],
+                            [max_lon, max_lat],
+                            [min_lon, max_lat],
+                            [min_lon, min_lat]
+                        ]]
+                    }
+                }
+            });
+
+            this.map.addLayer({
+                id: 'selected-bbox-outline',
+                type: 'line',
+                source: 'selected-bbox',
+                paint: {
+                    'line-color': '#d97706',
+                    'line-width': 2,
+                    'line-dasharray': [2, 2]
+                }
+            });
+        }
+    }
+
+    clearAdiff() {
+        if (!this.map) return;
+
+        this.adiffActive = false;
+
+        if (this._boundOnAdiffClick) {
+            this.map.off('click', 'adiff-lines', this._boundOnAdiffClick);
+            this.map.off('click', 'adiff-points', this._boundOnAdiffClick);
+            this._boundOnAdiffClick = null;
+        }
+
+        // Reset feature state
+        if (this.selectedChangeset && this.map.getSource('changesets')) {
+            this.map.setFeatureState(
+                { source: 'changesets', id: this.selectedChangeset.id },
+                { selected: true, adiffLoaded: false }
+            );
+        }
+
+        if (this.map.getLayer('adiff-points')) {
+            this.map.removeLayer('adiff-points');
+        }
+        if (this.map.getLayer('adiff-lines')) {
+            this.map.removeLayer('adiff-lines');
+        }
+        if (this.map.getSource('adiff')) {
+            this.map.removeSource('adiff');
+        }
+
+        // Remove bbox
+        if (this.map.getLayer('selected-bbox-outline')) {
+            this.map.removeLayer('selected-bbox-outline');
+        }
+        if (this.map.getSource('selected-bbox')) {
+            this.map.removeSource('selected-bbox');
+        }
+    }
+
+    onAdiffFeatureClick(e) {
+        const feature = e.features[0];
+        const props = feature.properties;
+
+        let tagsHtml = '';
+        if (props.tags) {
+            let tags = props.tags;
+            if (typeof tags === 'string') {
+                try { tags = JSON.parse(tags); } catch(e) {}
+            }
+
+            if (Object.keys(tags).length > 0) {
+                tagsHtml = '<table style="width:100%; font-size: 0.8rem; border-collapse: collapse;">';
+                for (const [k, v] of Object.entries(tags)) {
+                    tagsHtml += `<tr><td style="font-weight:bold; padding-right:5px; vertical-align: top;">${this.escapeHtml(k)}</td><td style="word-break: break-word;">${this.escapeHtml(v)}</td></tr>`;
+                }
+                tagsHtml += '</table>';
+            }
+        }
+
+        const changeColor = this.getChangeColor(props.changeType, props.version);
+
+        const content = `
+            <div style="font-size: 0.9rem; max-width: 300px;">
+                <h3 style="margin: 0 0 5px 0; font-size: 1rem;">${props.type}/${props.id}</h3>
+                <div style="margin-bottom: 8px;">
+                    <span style="font-weight: bold; text-transform: capitalize; color: ${changeColor}">${props.changeType}</span>
+                    ${props.version ? `<span style="color: #666;">(${props.version})</span>` : ''}
+                </div>
+                ${tagsHtml ? `<div style="margin-top: 5px; border-top: 1px solid #eee; padding-top: 5px;">${tagsHtml}</div>` : ''}
+            </div>
+        `;
+
+        new maplibregl.Popup()
+            .setLngLat(e.lngLat)
+            .setHTML(content)
+            .addTo(this.map);
+    }
+
+    getChangeColor(type, version) {
+        if (type === 'create') return '#10b981';
+        if (type === 'delete') return '#ef4444';
+        if (type === 'modify') return version === 'new' ? '#3b82f6' : '#f59e0b';
+        return '#333';
     }
 
     showChangesetDetails(changeset) {
@@ -766,6 +1010,9 @@ class ChangesetViewer {
             );
         }
         this.selectedChangeset = null;
+
+        // Clear adiff visualization
+        this.clearAdiff();
 
         // Remove active class from list
         document.querySelectorAll('.changeset-item').forEach(item => {

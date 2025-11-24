@@ -1,6 +1,7 @@
 // API routes using Hono framework
 import { Hono } from 'hono';
 import { cors } from 'hono/cors';
+import { XMLParser } from 'fast-xml-parser';
 import type { Env, Changeset } from './types';
 import {
   queryChangesets,
@@ -254,6 +255,33 @@ api.get('/stats/24h', async (c) => {
 });
 
 /**
+ * GET /api/changesets/:id/adiff - Get augmented diff for a changeset as GeoJSON
+ */
+api.get('/changesets/:id/adiff', async (c) => {
+  const id = parseInt(c.req.param('id'));
+
+  if (isNaN(id)) {
+    return c.json({ error: 'Invalid changeset ID' }, 400);
+  }
+
+  try {
+    const response = await fetch(`https://adiffs.osmcha.org/changesets/${id}.adiff`);
+
+    if (!response.ok) {
+      return c.json({ error: 'Failed to fetch adiff from OSMCha' }, response.status as any);
+    }
+
+    const xmlData = await response.text();
+    const geojson = convertAdiffToGeoJSON(xmlData);
+
+    return c.json(geojson);
+  } catch (error) {
+    console.error('Error fetching adiff:', error);
+    return c.json({ error: 'Failed to process adiff' }, 500);
+  }
+});
+
+/**
  * Convert changeset to GeoJSON feature (OSMCha-like format)
  */
 function changesetToFeature(changeset: Changeset): any {
@@ -293,6 +321,116 @@ function changesetToFeature(changeset: Changeset): any {
       tags: changeset.tags || {}
     }
   };
+}
+
+/**
+ * Convert Augmented Diff XML to GeoJSON
+ */
+function convertAdiffToGeoJSON(xmlData: string) {
+  const parser = new XMLParser({
+    ignoreAttributes: false,
+    attributeNamePrefix: "",
+    isArray: (name) => ["action", "node", "way", "relation", "nd", "member", "tag"].indexOf(name) !== -1
+  });
+  const jsonObj = parser.parse(xmlData);
+
+  const features: any[] = [];
+
+  if (jsonObj.osm && jsonObj.osm.action) {
+    const actions = Array.isArray(jsonObj.osm.action) ? jsonObj.osm.action : [jsonObj.osm.action];
+
+    for (const action of actions) {
+      const type = action.type; // create, modify, delete
+
+      if (type === 'create') {
+        // For create actions, the element is directly under the action node
+        extractFeatures(action, features, type, 'new');
+      } else {
+        if (action.old) {
+          extractFeatures(action.old, features, type, 'old');
+        }
+
+        if (action.new && type !== 'delete') {
+          extractFeatures(action.new, features, type, 'new');
+        }
+      }
+    }
+  }
+
+  return {
+    type: "FeatureCollection",
+    features: features
+  };
+}
+
+function extractFeatures(container: any, features: any[], actionType: string, version: string) {
+  if (container.node) {
+    container.node.forEach((node: any) => {
+      const f = nodeToFeature(node);
+      if (f) {
+        f.properties = { ...f.properties, changeType: actionType, version };
+        features.push(f);
+      }
+    });
+  }
+  if (container.way) {
+    container.way.forEach((way: any) => {
+      const f = wayToFeature(way);
+      if (f) {
+        f.properties = { ...f.properties, changeType: actionType, version };
+        features.push(f);
+      }
+    });
+  }
+}
+
+function nodeToFeature(node: any) {
+  if (!node.lat || !node.lon) return null;
+  return {
+    type: "Feature",
+    geometry: {
+      type: "Point",
+      coordinates: [parseFloat(node.lon), parseFloat(node.lat)]
+    },
+    properties: {
+      type: "node",
+      id: node.id,
+      tags: parseTags(node.tag)
+    }
+  };
+}
+
+function wayToFeature(way: any) {
+  if (!way.nd || way.nd.length === 0) return null;
+
+  const coordinates = way.nd
+    .filter((nd: any) => nd.lat && nd.lon)
+    .map((nd: any) => [parseFloat(nd.lon), parseFloat(nd.lat)]);
+
+  if (coordinates.length < 2) return null;
+
+  return {
+    type: "Feature",
+    geometry: {
+      type: "LineString",
+      coordinates: coordinates
+    },
+    properties: {
+      type: "way",
+      id: way.id,
+      tags: parseTags(way.tag)
+    }
+  };
+}
+
+function parseTags(tags: any) {
+  if (!tags) return {};
+  const result: Record<string, string> = {};
+  const tagArray = Array.isArray(tags) ? tags : [tags];
+  tagArray.forEach((t: any) => {
+    if (t.k && t.v) result[t.k] = t.v;
+  });
+  return result;
 }
 
 export default api;
