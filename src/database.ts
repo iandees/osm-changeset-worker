@@ -169,24 +169,29 @@ export async function queryChangesets(
   }
 
   // Filter by tags using SQLite JSON functions
-  if (filters.tags && Object.keys(filters.tags).length > 0) {
+  if (filters.tags && Array.isArray(filters.tags) && filters.tags.length > 0) {
+    for (const tagFilter of filters.tags) {
+      const { key, operator, value } = tagFilter;
+
+      if (operator === '=') {
+        query += ` AND json_extract(tags, '$."' || ? || '"') = ?`;
+        params.push(key, value);
+      } else if (operator === '!=') {
+        // != matches if key exists and value is different, OR if key does not exist (is null)
+        query += ` AND (json_extract(tags, '$."' || ? || '"') IS NOT ? OR json_extract(tags, '$."' || ? || '"') IS NULL)`;
+        params.push(key, value, key);
+      }
+    }
+  } else if (filters.tags && !Array.isArray(filters.tags) && Object.keys(filters.tags).length > 0) {
+    // Fallback for legacy object format if any
     for (const [key, value] of Object.entries(filters.tags)) {
-      query += ` AND json_extract(tags, ?) = ?`;
-      params.push(`$.${key}`, value);
+      query += ` AND json_extract(tags, '$."' || ? || '"') = ?`;
+      params.push(key, value);
     }
   }
 
-  query += ' ORDER BY created_at DESC';
-
-  if (filters.limit) {
-    query += ' LIMIT ?';
-    params.push(filters.limit);
-  }
-
-  if (filters.offset) {
-    query += ' OFFSET ?';
-    params.push(filters.offset);
-  }
+  query += ` ORDER BY created_at DESC LIMIT ? OFFSET ?`;
+  params.push(filters.limit, filters.offset);
 
   const stmt = db.prepare(query).bind(...params);
   const { results } = await stmt.all();

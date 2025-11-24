@@ -120,13 +120,16 @@ function getFiltersFromContext(c: any) {
   }
 
   if (tagsParams && tagsParams.length > 0) {
-    filters.tags = {};
+    filters.tags = [];
     for (const tagParam of tagsParams) {
-      const [key, value] = tagParam.split('=', 2);
-      if (key && value !== undefined) {
-        filters.tags[key] = value;
+      // Check for operators in order of specificity (!= before =)
+      let match;
+      if ((match = tagParam.match(/^([^!=]+)!=(.*)$/))) {
+        filters.tags.push({ key: match[1], operator: '!=', value: match[2] });
+      } else if ((match = tagParam.match(/^([^=]+)=(.*)$/))) {
+        filters.tags.push({ key: match[1], operator: '=', value: match[2] });
       } else {
-        throw new Error('Invalid tag format. Use: tags=key=value');
+        throw new Error('Invalid tag format. Use: key=value or key!=value');
       }
     }
   }
