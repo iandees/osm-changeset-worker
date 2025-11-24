@@ -816,11 +816,11 @@ class ChangesetViewer {
             this._boundOnAdiffClick = null;
         }
 
-        // Reset feature state
+        // Reset feature state - only reset adiffLoaded, preserve selected state
         if (this.selectedChangeset && this.map.getSource('changesets')) {
             this.map.setFeatureState(
                 { source: 'changesets', id: this.selectedChangeset.id },
-                { selected: true, adiffLoaded: false }
+                { adiffLoaded: false }
             );
         }
 
@@ -1011,6 +1011,9 @@ class ChangesetViewer {
     closePanel() {
         document.getElementById('changesetDetailPanel').classList.remove('active');
 
+        // Clear adiff visualization first, while selectedChangeset is still valid
+        this.clearAdiff();
+
         // Deselect on map
         if (this.selectedChangeset && this.map.getSource('changesets')) {
             this.map.setFeatureState(
@@ -1019,9 +1022,6 @@ class ChangesetViewer {
             );
         }
         this.selectedChangeset = null;
-
-        // Clear adiff visualization
-        this.clearAdiff();
 
         // Remove active class from list
         document.querySelectorAll('.changeset-item').forEach(item => {
