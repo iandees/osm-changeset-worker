@@ -508,6 +508,9 @@ class ChangesetViewer {
             id: 'changesets-fill',
             type: 'fill',
             source: 'changesets',
+            layout: {
+                visibility: this.adiffActive ? 'none' : 'visible'
+            },
             paint: {
                 'fill-color': [
                     'case',
@@ -535,6 +538,9 @@ class ChangesetViewer {
             id: 'changesets-outline',
             type: 'line',
             source: 'changesets',
+            layout: {
+                visibility: this.adiffActive ? 'none' : 'visible'
+            },
             paint: {
                 'line-color': [
                     'case',
@@ -649,7 +655,7 @@ class ChangesetViewer {
             }
 
             this.map.fitBounds(bounds, {
-                padding: { top: 10, bottom: 300, left: 10, right: 10 }, // Add bottom padding for panel
+                padding: { top: 50, bottom: 50, left: 50, right: 50 },
                 maxZoom: 22,
                 duration: 250,
             });
@@ -680,6 +686,14 @@ class ChangesetViewer {
         if (!this.map) return;
 
         this.adiffActive = true;
+
+        // Hide other changesets
+        if (this.map.getLayer('changesets-fill')) {
+            this.map.setLayoutProperty('changesets-fill', 'visibility', 'none');
+        }
+        if (this.map.getLayer('changesets-outline')) {
+            this.map.setLayoutProperty('changesets-outline', 'visibility', 'none');
+        }
 
         // Set feature state to hide fill/outline of selected changeset
         if (this.selectedChangeset && this.map.getSource('changesets')) {
@@ -810,6 +824,14 @@ class ChangesetViewer {
 
         this.adiffActive = false;
 
+        // Show other changesets
+        if (this.map.getLayer('changesets-fill')) {
+            this.map.setLayoutProperty('changesets-fill', 'visibility', 'visible');
+        }
+        if (this.map.getLayer('changesets-outline')) {
+            this.map.setLayoutProperty('changesets-outline', 'visibility', 'visible');
+        }
+
         if (this._boundOnAdiffClick) {
             this.map.off('click', 'adiff-lines', this._boundOnAdiffClick);
             this.map.off('click', 'adiff-points', this._boundOnAdiffClick);
@@ -899,6 +921,8 @@ class ChangesetViewer {
                <button class="filter-tag-btn" title="Filter by this editor" data-tag="created_by=${this.escapeHtml(createdBy)}" style="background: none; border: none; cursor: pointer; padding: 0 4px; font-size: 0.875rem;">🔍</button>
             </p>` : '';
 
+        const comment = changeset.tags?.comment || '';
+
         const tagRows = Object.entries(changeset.tags || {})
             .map(([key, value]) => `
                 <tr>
@@ -909,18 +933,28 @@ class ChangesetViewer {
 
         const panelContent = document.getElementById('panelContent');
         panelContent.innerHTML = `
-            <div class="panel-header">
-                <h2 style="margin: 0; font-size: 1.25rem;">Changeset #${changeset.id}</h2>
-                <span class="changeset-status ${statusClass}">${status}</span>
-                <a href="https://www.openstreetmap.org/changeset/${changeset.id}"
-                   target="_blank"
-                   class="btn btn-primary" style="margin-left: auto; padding: 0.25rem 0.75rem; font-size: 0.875rem;">
-                    View on OpenStreetMap ↗
-                </a>
+            <div class="panel-header" style="flex-direction: column; align-items: flex-start; gap: 8px;">
+                <div style="display: flex; align-items: center; width: 100%; justify-content: space-between;">
+                    <h2 style="margin: 0; font-size: 1.25rem;">Changeset #${changeset.id}</h2>
+                    <span class="changeset-status ${statusClass}">${status}</span>
+                </div>
+                <div style="display: flex; gap: 12px; font-size: 0.8rem;">
+                    <a href="https://www.openstreetmap.org/changeset/${changeset.id}"
+                       target="_blank"
+                       style="color: #94a3b8; text-decoration: none; display: flex; align-items: center; gap: 2px;">
+                        View on OSM ↗
+                    </a>
+                    <a href="https://osmcha.org/changesets/${changeset.id}"
+                       target="_blank"
+                       style="color: #94a3b8; text-decoration: none; display: flex; align-items: center; gap: 2px;">
+                        View on OSMCha ↗
+                    </a>
+                </div>
             </div>
 
             <div class="panel-grid">
                 <div class="panel-section">
+                    ${comment ? `<div style="background: #f8fafc; padding: 8px; border-radius: 4px; border: 1px solid #e2e8f0; margin-bottom: 12px; font-style: italic;">${this.escapeHtml(comment)}</div>` : ''}
                     <p>👤 ${this.escapeHtml(changeset.user_name || 'Unknown')}
                        <button class="filter-user-btn" title="Filter by this user" data-username="${this.escapeHtml(changeset.user_name || '')}" style="background: none; border: none; cursor: pointer; padding: 0 4px; font-size: 0.875rem;">🔍</button>
                        ${changeset.user_id ? `<span style="color: #94a3b8; font-size: 0.875rem;">(ID: ${changeset.user_id})</span>` : ''}</p>
@@ -932,22 +966,24 @@ class ChangesetViewer {
                 </div>
 
                 <div class="panel-section">
-                    <h3>Tags</h3>
-                    ${tagRows ? `
-                        <div style="overflow-x: auto;">
-                            <table style="width: 100%; border-collapse: collapse; font-size: 0.875rem; text-align: left;">
-                                <thead>
-                                    <tr style="background-color: #f1f5f9;">
-                                        <th style="padding: 8px; border-bottom: 2px solid #cbd5e1; width: 30%;">Key</th>
-                                        <th style="padding: 8px; border-bottom: 2px solid #cbd5e1;">Value</th>
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                    ${tagRows}
-                                </tbody>
-                            </table>
-                        </div>
-                    ` : '<p style="color: #64748b; font-style: italic;">No tags</p>'}
+                    <details>
+                        <summary style="cursor: pointer; font-weight: 600; color: #475569; user-select: none;">Tags</summary>
+                        ${tagRows ? `
+                            <div style="overflow-x: auto; margin-top: 8px;">
+                                <table style="width: 100%; border-collapse: collapse; font-size: 0.875rem; text-align: left;">
+                                    <thead>
+                                        <tr style="background-color: #f1f5f9;">
+                                            <th style="padding: 8px; border-bottom: 2px solid #cbd5e1; width: 30%;">Key</th>
+                                            <th style="padding: 8px; border-bottom: 2px solid #cbd5e1;">Value</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        ${tagRows}
+                                    </tbody>
+                                </table>
+                            </div>
+                        ` : '<p style="color: #64748b; font-style: italic; margin-top: 8px;">No tags</p>'}
+                    </details>
                 </div>
             </div>
         `;
