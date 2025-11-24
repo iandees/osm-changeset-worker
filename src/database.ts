@@ -180,6 +180,10 @@ export async function queryChangesets(
         // != matches if key exists and value is different, OR if key does not exist (is null)
         query += ` AND (json_extract(tags, '$."' || ? || '"') IS NOT ? OR json_extract(tags, '$."' || ? || '"') IS NULL)`;
         params.push(key, value, key);
+      } else if (operator === '~') {
+        // LIKE match (contains)
+        query += ` AND json_extract(tags, '$."' || ? || '"') LIKE ?`;
+        params.push(key, `%${value}%`);
       }
     }
   } else if (filters.tags && !Array.isArray(filters.tags) && Object.keys(filters.tags).length > 0) {

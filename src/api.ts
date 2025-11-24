@@ -126,10 +126,12 @@ function getFiltersFromContext(c: any) {
       let match;
       if ((match = tagParam.match(/^([^!=]+)!=(.*)$/))) {
         filters.tags.push({ key: match[1], operator: '!=', value: match[2] });
+      } else if ((match = tagParam.match(/^([^~]+)~(.*)$/))) {
+        filters.tags.push({ key: match[1], operator: '~', value: match[2] });
       } else if ((match = tagParam.match(/^([^=]+)=(.*)$/))) {
         filters.tags.push({ key: match[1], operator: '=', value: match[2] });
       } else {
-        throw new Error('Invalid tag format. Use: key=value or key!=value');
+        throw new Error('Invalid tag format. Use: key=value, key!=value, or key~regex');
       }
     }
   }
