@@ -285,6 +285,17 @@ body {
     padding-left: calc(var(--spacing-md) - 3px);
 }
 
+.changeset-item.focused {
+    background-color: #f1f5f9;
+    border-left: 4px solid #94a3b8;
+    padding-left: 12px; /* Adjust padding to account for border */
+}
+
+/* Ensure active state takes precedence or looks distinct */
+.changeset-item.active.focused {
+    border-left-color: #2563eb;
+}
+
 .changeset-header {
     display: flex;
     justify-content: space-between;
@@ -489,4 +500,78 @@ body {
     .sidebar.active {
         transform: translateX(0);
     }
+}
+
+/* Help Popup */
+.help-popup {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(0, 0, 0, 0.5);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 1000;
+}
+
+.help-popup-content {
+    background: white;
+    padding: 24px;
+    border-radius: 8px;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+    width: 300px;
+}
+
+.help-popup-content h3 {
+    margin-top: 0;
+    margin-bottom: 16px;
+    color: #1e293b;
+    font-size: 1.1rem;
+}
+
+.shortcut-list {
+    list-style: none;
+    padding: 0;
+    margin: 0 0 20px 0;
+}
+
+.shortcut-list li {
+    display: flex;
+    align-items: center;
+    margin-bottom: 12px;
+}
+
+.shortcut-list .key {
+    background: #f1f5f9;
+    border: 1px solid #cbd5e1;
+    border-radius: 4px;
+    padding: 2px 8px;
+    font-family: monospace;
+    font-weight: 600;
+    color: #334155;
+    min-width: 24px;
+    text-align: center;
+    margin-right: 12px;
+}
+
+.shortcut-list .desc {
+    color: #475569;
+    font-size: 0.9rem;
+}
+
+.close-help-btn {
+    width: 100%;
+    padding: 8px;
+    background: #3b82f6;
+    color: white;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    font-weight: 500;
+}
+
+.close-help-btn:hover {
+    background: #2563eb;
 }

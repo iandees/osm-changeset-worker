@@ -10,6 +10,7 @@ class ChangesetViewer {
         this.bboxDrawStart = null; // Starting point for bbox drawing
         this.bboxDrawLayer = null; // Layer for drawing bbox preview
         this.adiffActive = false; // Track if adiff is loaded
+        this.focusedIndex = -1; // Track focused changeset in list
 
         this.init();
     }
@@ -56,6 +57,11 @@ class ChangesetViewer {
     }
 
     initEventListeners() {
+        // Keyboard shortcuts
+        document.addEventListener('keydown', (e) => {
+            this.handleKeyboardShortcuts(e);
+        });
+
         // Filter buttons
         document.getElementById('applyFilters').addEventListener('click', () => {
             console.log('Apply Filters clicked');
@@ -132,6 +138,99 @@ class ChangesetViewer {
         document.getElementById('limit').addEventListener('keypress', (e) => {
             if (e.key === 'Enter') {
                 this.loadChangesets();
+            }
+        });
+    }
+
+    handleKeyboardShortcuts(e) {
+        // Ignore if user is typing in an input field
+        if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') {
+            return;
+        }
+
+        switch (e.key) {
+            case 'j':
+                this.moveFocus(1);
+                break;
+            case 'k':
+                this.moveFocus(-1);
+                break;
+            case '/':
+                e.preventDefault();
+                const usernameInput = document.getElementById('username');
+                if (usernameInput) {
+                    usernameInput.focus();
+                    usernameInput.select();
+                }
+                break;
+            case '?':
+                this.toggleHelpPopup();
+                break;
+        }
+    }
+
+    toggleHelpPopup() {
+        let popup = document.getElementById('keyboard-help-popup');
+        if (popup) {
+            popup.remove();
+            return;
+        }
+
+        popup = document.createElement('div');
+        popup.id = 'keyboard-help-popup';
+        popup.className = 'help-popup';
+        popup.innerHTML = `
+            <div class="help-popup-content">
+                <h3>Keyboard Shortcuts</h3>
+                <ul class="shortcut-list">
+                    <li><span class="key">j</span> <span class="desc">Select next changeset</span></li>
+                    <li><span class="key">k</span> <span class="desc">Select previous changeset</span></li>
+                    <li><span class="key">/</span> <span class="desc">Focus username search</span></li>
+                    <li><span class="key">?</span> <span class="desc">Show this help</span></li>
+                </ul>
+                <button class="close-help-btn">Close</button>
+            </div>
+        `;
+
+        document.body.appendChild(popup);
+
+        popup.querySelector('.close-help-btn').addEventListener('click', () => {
+            popup.remove();
+        });
+
+        popup.addEventListener('click', (e) => {
+            if (e.target === popup) {
+                popup.remove();
+            }
+        });
+    }
+
+    moveFocus(delta) {
+        if (this.changesets.length === 0) return;
+
+        // Initialize focus if none
+        if (this.focusedIndex === -1) {
+            this.focusedIndex = delta > 0 ? 0 : this.changesets.length - 1;
+        } else {
+            this.focusedIndex += delta;
+        }
+
+        // Clamp index
+        if (this.focusedIndex < 0) this.focusedIndex = 0;
+        if (this.focusedIndex >= this.changesets.length) this.focusedIndex = this.changesets.length - 1;
+
+        this.updateFocusVisuals();
+        this.selectChangeset(this.changesets[this.focusedIndex]);
+    }
+
+    updateFocusVisuals() {
+        const items = document.querySelectorAll('.changeset-item');
+        items.forEach((item, index) => {
+            if (index === this.focusedIndex) {
+                item.classList.add('focused');
+                item.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+            } else {
+                item.classList.remove('focused');
             }
         });
     }
@@ -374,6 +473,9 @@ class ChangesetViewer {
     renderChangesets() {
         const changesetItems = document.getElementById('changesetItems');
 
+        // Reset focus when list reloads
+        this.focusedIndex = -1;
+
         // Update the header with count
         const header = document.getElementById('changesetListHeader');
         header.innerHTML = `Changesets <span style="font-size: 0.875rem; color: #94a3b8; font-weight: 400;">(${this.changesets.length.toLocaleString()})</span>`;
@@ -394,6 +496,8 @@ class ChangesetViewer {
         // Add click listeners
         changesetItems.querySelectorAll('.changeset-item').forEach((item, index) => {
             item.addEventListener('click', () => {
+                this.focusedIndex = index; // Update focus on click
+                this.updateFocusVisuals();
                 this.selectChangeset(this.changesets[index]);
             });
         });
@@ -611,6 +715,13 @@ class ChangesetViewer {
         this.clearAdiff();
 
         this.selectedChangeset = changeset;
+
+        // Sync focusedIndex if selection didn't come from keyboard/list click
+        const index = this.changesets.findIndex(cs => cs.id === changeset.id);
+        if (index !== -1 && index !== this.focusedIndex) {
+            this.focusedIndex = index;
+            this.updateFocusVisuals();
+        }
 
         // Select new
         if (this.selectedChangeset && this.map.getSource('changesets')) {
