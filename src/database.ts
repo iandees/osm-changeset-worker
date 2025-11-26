@@ -62,12 +62,21 @@ export async function storeChangeset(db: D1Database, changeset: Changeset): Prom
  * Store multiple changesets in a batch
  */
 export async function storeChangesets(db: D1Database, changesets: any[]) {
-  // Insert changesets
+  // Insert or update changesets
   const stmt = db.prepare(`
-    INSERT OR IGNORE INTO changesets (
+    INSERT INTO changesets (
       id, created_at, closed_at, min_lat, min_lon, max_lat, max_lon,
       user_id, user_name, num_changes, comments_count, tags
     ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    ON CONFLICT(id) DO UPDATE SET
+      closed_at = excluded.closed_at,
+      min_lat = excluded.min_lat,
+      min_lon = excluded.min_lon,
+      max_lat = excluded.max_lat,
+      max_lon = excluded.max_lon,
+      num_changes = excluded.num_changes,
+      comments_count = excluded.comments_count,
+      tags = excluded.tags
   `);
 
   const batch = changesets.map(cs => stmt.bind(
