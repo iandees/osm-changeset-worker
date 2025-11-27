@@ -11,11 +11,13 @@ class ChangesetViewer {
         this.bboxDrawLayer = null; // Layer for drawing bbox preview
         this.adiffActive = false; // Track if adiff is loaded
         this.focusedIndex = -1; // Track focused changeset in list
+        this.readChangesets = new Set(); // Track read changesets
 
         this.init();
     }
 
     async init() {
+        this.loadReadStatus();
         this.initMap();
         this.initEventListeners();
         this.loadFiltersFromUrl();
@@ -163,6 +165,11 @@ class ChangesetViewer {
                     usernameInput.select();
                 }
                 break;
+            case 'r':
+                if (this.focusedIndex >= 0 && this.focusedIndex < this.changesets.length) {
+                    this.toggleReadStatus(this.changesets[this.focusedIndex]);
+                }
+                break;
             case '?':
                 this.toggleHelpPopup();
                 break;
@@ -186,6 +193,7 @@ class ChangesetViewer {
                     <li><span class="key">j</span> <span class="desc">Select next changeset</span></li>
                     <li><span class="key">k</span> <span class="desc">Select previous changeset</span></li>
                     <li><span class="key">/</span> <span class="desc">Focus username search</span></li>
+                    <li><span class="key">r</span> <span class="desc">Toggle read/unread status</span></li>
                     <li><span class="key">?</span> <span class="desc">Show this help</span></li>
                 </ul>
                 <button class="close-help-btn">Close</button>
@@ -470,6 +478,54 @@ class ChangesetViewer {
                changeset.max_lon != null;
     }
 
+    loadReadStatus() {
+        try {
+            const stored = localStorage.getItem('osm_changeset_viewer_read');
+            if (stored) {
+                this.readChangesets = new Set(JSON.parse(stored));
+            }
+        } catch (e) {
+            console.error('Failed to load read status', e);
+        }
+    }
+
+    saveReadStatus() {
+        try {
+            localStorage.setItem('osm_changeset_viewer_read', JSON.stringify([...this.readChangesets]));
+        } catch (e) {
+            console.error('Failed to save read status', e);
+        }
+    }
+
+    markAsRead(changeset) {
+        if (!changeset || this.readChangesets.has(changeset.id)) return;
+        this.readChangesets.add(changeset.id);
+        this.saveReadStatus();
+        this.updateReadVisuals(changeset.id);
+    }
+
+    toggleReadStatus(changeset) {
+        if (!changeset) return;
+        if (this.readChangesets.has(changeset.id)) {
+            this.readChangesets.delete(changeset.id);
+        } else {
+            this.readChangesets.add(changeset.id);
+        }
+        this.saveReadStatus();
+        this.updateReadVisuals(changeset.id);
+    }
+
+    updateReadVisuals(id) {
+        const item = document.querySelector(`.changeset-item[data-id="${id}"]`);
+        if (item) {
+            if (this.readChangesets.has(id)) {
+                item.classList.add('read');
+            } else {
+                item.classList.remove('read');
+            }
+        }
+    }
+
     renderChangesets() {
         const changesetItems = document.getElementById('changesetItems');
 
@@ -506,6 +562,7 @@ class ChangesetViewer {
     createChangesetItem(changeset) {
         const statusClass = changeset.open ? 'status-open' : 'status-closed';
         const status = changeset.open ? 'Open' : 'Closed';
+        const readClass = this.readChangesets.has(changeset.id) ? 'read' : '';
         const comment = changeset.tags?.comment || '';
         const commentHtml = comment ?
             `<div class="changeset-comment">"${this.escapeHtml(comment)}"</div>` : '';
@@ -514,7 +571,7 @@ class ChangesetViewer {
         const timeAgo = this.getTimeAgo(date);
 
         return `
-            <div class="changeset-item" data-id="${changeset.id}">
+            <div class="changeset-item ${readClass}" data-id="${changeset.id}">
                 <div class="changeset-header">
                     <span class="changeset-id">#${changeset.id}</span>
                     <span class="changeset-status ${statusClass}">${status}</span>
@@ -703,6 +760,9 @@ class ChangesetViewer {
     }
 
     async selectChangeset(changeset) {
+        // Mark as read when selected
+        this.markAsRead(changeset);
+
         // Deselect previous
         if (this.selectedChangeset && this.map.getSource('changesets')) {
             this.map.setFeatureState(

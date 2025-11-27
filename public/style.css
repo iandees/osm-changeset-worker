@@ -575,3 +575,26 @@ body {
 .close-help-btn:hover {
     background: #2563eb;
 }
+
+/* Read state for changesets */
+.changeset-item.read {
+    background-color: #fafafa;
+}
+
+.changeset-item.read .changeset-id,
+.changeset-item.read .changeset-user {
+    color: #94a3b8;
+}
+
+/* Ensure active state overrides read background and text color */
+.changeset-item.active.read {
+    background-color: #eff6ff;
+}
+
+.changeset-item.active.read .changeset-id {
+    color: #334155;
+}
+
+.changeset-item.active.read .changeset-user {
+    color: #0f172a;
+}
