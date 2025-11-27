@@ -866,6 +866,21 @@ class ChangesetViewer {
         this.adiffActive = true;
         this.adiffData = geojson;
 
+        // Pre-process features to identify untagged nodes
+        geojson.features.forEach(f => {
+            let hasTags = false;
+            if (f.properties.tags) {
+                let tags = f.properties.tags;
+                if (typeof tags === 'string') {
+                    try { tags = JSON.parse(tags); } catch(e) {}
+                }
+                if (tags && Object.keys(tags).length > 0) {
+                    hasTags = true;
+                }
+            }
+            f.properties.hasTags = hasTags;
+        });
+
         // Hide other changesets
         if (this.map.getLayer('changesets-fill')) {
             this.map.setLayoutProperty('changesets-fill', 'visibility', 'none');
@@ -882,10 +897,83 @@ class ChangesetViewer {
             );
         }
 
+        // Process features to highlight geometry changes
+        const processedFeatures = [];
+        const modifiedWays = {};
+
+        geojson.features.forEach(f => {
+            const p = f.properties;
+            if (p.changeType === 'modify' && f.geometry.type === 'LineString') {
+                if (!modifiedWays[p.id]) modifiedWays[p.id] = {};
+                modifiedWays[p.id][p.version] = f;
+            } else {
+                processedFeatures.push(f);
+            }
+        });
+
+        Object.keys(modifiedWays).forEach(id => {
+            const pair = modifiedWays[id];
+            if (pair.old && pair.new) {
+                const oldCoords = pair.old.geometry.coordinates;
+                const newCoords = pair.new.geometry.coordinates;
+
+                const oldSegments = [];
+                for (let i = 0; i < oldCoords.length - 1; i++) {
+                    oldSegments.push([oldCoords[i], oldCoords[i+1]]);
+                }
+                const newSegments = [];
+                for (let i = 0; i < newCoords.length - 1; i++) {
+                    newSegments.push([newCoords[i], newCoords[i+1]]);
+                }
+
+                const oldSegStrings = new Set(oldSegments.map(s => JSON.stringify(s)));
+                const newSegStrings = new Set(newSegments.map(s => JSON.stringify(s)));
+
+                const unchangedCoords = newSegments.filter(s => oldSegStrings.has(JSON.stringify(s)));
+                const changedNewCoords = newSegments.filter(s => !oldSegStrings.has(JSON.stringify(s)));
+                const changedOldCoords = oldSegments.filter(s => !newSegStrings.has(JSON.stringify(s)));
+
+                const isGeometryChanged = changedNewCoords.length > 0 || changedOldCoords.length > 0;
+
+                if (isGeometryChanged) {
+                    if (unchangedCoords.length > 0) {
+                        processedFeatures.push({
+                            type: 'Feature',
+                            geometry: { type: 'MultiLineString', coordinates: unchangedCoords },
+                            properties: { ...pair.new.properties, diffStatus: 'unchanged' }
+                        });
+                    }
+                    if (changedNewCoords.length > 0) {
+                        processedFeatures.push({
+                            type: 'Feature',
+                            geometry: { type: 'MultiLineString', coordinates: changedNewCoords },
+                            properties: { ...pair.new.properties, diffStatus: 'changed' }
+                        });
+                    }
+                    if (changedOldCoords.length > 0) {
+                        processedFeatures.push({
+                            type: 'Feature',
+                            geometry: { type: 'MultiLineString', coordinates: changedOldCoords },
+                            properties: { ...pair.old.properties, diffStatus: 'changed' }
+                        });
+                    }
+                } else {
+                    processedFeatures.push(pair.old);
+                    processedFeatures.push(pair.new);
+                }
+            } else {
+                if (pair.old) processedFeatures.push(pair.old);
+                if (pair.new) processedFeatures.push(pair.new);
+            }
+        });
+
         // Add source
         this.map.addSource('adiff', {
             type: 'geojson',
-            data: geojson
+            data: {
+                type: 'FeatureCollection',
+                features: processedFeatures
+            }
         });
 
         // Add line layer
@@ -893,23 +981,38 @@ class ChangesetViewer {
             id: 'adiff-lines',
             type: 'line',
             source: 'adiff',
-            filter: ['==', ['geometry-type'], 'LineString'],
+            filter: ['!=', ['geometry-type'], 'Point'],
             paint: {
-                'line-width': 4,
-                'line-color': [
-                    'match',
-                    ['get', 'changeType'],
-                    'create', '#10b981', // Green
-                    'delete', '#ef4444', // Red
-                    'modify', [
-                        'match',
-                        ['get', 'version'],
-                        'new', '#3b82f6', // Blue
-                        '#f59e0b' // Orange
-                    ],
-                    '#888888' // Default
+                'line-width': [
+                    'case',
+                    ['==', ['get', 'diffStatus'], 'unchanged'],
+                    2,
+                    4
                 ],
-                'line-opacity': 0.8
+                'line-color': [
+                    'case',
+                    ['==', ['get', 'diffStatus'], 'unchanged'],
+                    '#94a3b8', // Grey for unchanged parts
+                    [
+                        'match',
+                        ['get', 'changeType'],
+                        'create', '#10b981', // Green
+                        'delete', '#ef4444', // Red
+                        'modify', [
+                            'match',
+                            ['get', 'version'],
+                            'new', '#3b82f6', // Blue
+                            '#f59e0b' // Orange
+                        ],
+                        '#888888' // Default
+                    ]
+                ],
+                'line-opacity': [
+                    'case',
+                    ['==', ['get', 'diffStatus'], 'unchanged'],
+                    0.3,
+                    0.8
+                ]
             }
         });
 
@@ -920,7 +1023,12 @@ class ChangesetViewer {
             source: 'adiff',
             filter: ['==', ['geometry-type'], 'Point'],
             paint: {
-                'circle-radius': 5,
+                'circle-radius': [
+                    'case',
+                    ['boolean', ['get', 'hasTags'], false],
+                    5,
+                    3 // Smaller for untagged
+                ],
                 'circle-color': [
                     'match',
                     ['get', 'changeType'],
@@ -934,7 +1042,18 @@ class ChangesetViewer {
                     ],
                     '#888888'
                 ],
-                'circle-stroke-width': 1,
+                'circle-opacity': [
+                    'case',
+                    ['boolean', ['get', 'hasTags'], false],
+                    1,
+                    0.5 // Less opaque for untagged
+                ],
+                'circle-stroke-width': [
+                    'case',
+                    ['boolean', ['get', 'hasTags'], false],
+                    1,
+                    0 // No stroke for untagged
+                ],
                 'circle-stroke-color': '#ffffff'
             }
         });
