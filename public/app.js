@@ -10,6 +10,7 @@ class ChangesetViewer {
         this.bboxDrawStart = null; // Starting point for bbox drawing
         this.bboxDrawLayer = null; // Layer for drawing bbox preview
         this.adiffActive = false; // Track if adiff is loaded
+        this.adiffData = null; // Store adiff GeoJSON data
         this.focusedIndex = -1; // Track focused changeset in list
         this.readChangesets = new Set(); // Track read changesets
 
@@ -863,6 +864,7 @@ class ChangesetViewer {
         if (!this.map) return;
 
         this.adiffActive = true;
+        this.adiffData = geojson;
 
         // Hide other changesets
         if (this.map.getLayer('changesets-fill')) {
@@ -1046,20 +1048,45 @@ class ChangesetViewer {
         const feature = e.features[0];
         const props = feature.properties;
 
-        let tagsHtml = '';
+        let tags = {};
         if (props.tags) {
-            let tags = props.tags;
-            if (typeof tags === 'string') {
-                try { tags = JSON.parse(tags); } catch(e) {}
+            if (typeof props.tags === 'string') {
+                try { tags = JSON.parse(props.tags); } catch(e) {}
+            } else {
+                tags = props.tags;
             }
+        }
 
-            if (Object.keys(tags).length > 0) {
-                tagsHtml = '<table style="width:100%; font-size: 0.8rem; border-collapse: collapse;">';
-                for (const [k, v] of Object.entries(tags)) {
-                    tagsHtml += `<tr><td style="font-weight:bold; padding-right:5px; vertical-align: top;">${this.escapeHtml(k)}</td><td style="word-break: break-word;">${this.escapeHtml(v)}</td></tr>`;
+        let tagsHtml = '';
+
+        // If modify, try to find the other version to diff
+        if (props.changeType === 'modify' && this.adiffData) {
+            const currentVersion = props.version; // 'new' or 'old'
+            const otherVersion = currentVersion === 'new' ? 'old' : 'new';
+
+            const otherFeature = this.adiffData.features.find(f =>
+                f.properties.id === props.id &&
+                f.properties.type === props.type &&
+                f.properties.version === otherVersion
+            );
+
+            if (otherFeature) {
+                let otherTags = otherFeature.properties.tags;
+                if (typeof otherTags === 'string') {
+                    try { otherTags = JSON.parse(otherTags); } catch(e) {}
+                } else if (!otherTags) {
+                    otherTags = {};
                 }
-                tagsHtml += '</table>';
+
+                const oldTags = currentVersion === 'new' ? otherTags : tags;
+                const newTags = currentVersion === 'new' ? tags : otherTags;
+
+                tagsHtml = this.generateTagDiffHtml(oldTags, newTags);
+            } else {
+                tagsHtml = this.generateTagsTable(tags);
             }
+        } else {
+            tagsHtml = this.generateTagsTable(tags);
         }
 
         const changeColor = this.getChangeColor(props.changeType, props.version);
@@ -1079,6 +1106,45 @@ class ChangesetViewer {
             .setLngLat(e.lngLat)
             .setHTML(content)
             .addTo(this.map);
+    }
+
+    generateTagsTable(tags) {
+        if (Object.keys(tags).length === 0) return '';
+        let html = '<table style="width:100%; font-size: 0.8rem; border-collapse: collapse;">';
+        for (const [k, v] of Object.entries(tags)) {
+            html += `<tr><td style="font-weight:bold; padding-right:5px; vertical-align: top;">${this.escapeHtml(k)}</td><td style="word-break: break-word;">${this.escapeHtml(v)}</td></tr>`;
+        }
+        html += '</table>';
+        return html;
+    }
+
+    generateTagDiffHtml(oldTags, newTags) {
+        const allKeys = new Set([...Object.keys(oldTags), ...Object.keys(newTags)]);
+        if (allKeys.size === 0) return '';
+
+        let html = '<table style="width:100%; font-size: 0.8rem; border-collapse: collapse;">';
+        const sortedKeys = Array.from(allKeys).sort();
+
+        for (const key of sortedKeys) {
+            const oldVal = oldTags[key];
+            const newVal = newTags[key];
+
+            if (oldVal === newVal) {
+                // Unchanged
+                html += `<tr><td style="font-weight:bold; padding-right:5px; vertical-align: top; color: #666;">${this.escapeHtml(key)}</td><td style="word-break: break-word; color: #666;">${this.escapeHtml(newVal)}</td></tr>`;
+            } else if (oldVal === undefined) {
+                // Added
+                html += `<tr style="background-color: #dcfce7;"><td style="font-weight:bold; padding-right:5px; vertical-align: top; color: #166534;">+ ${this.escapeHtml(key)}</td><td style="word-break: break-word; color: #166534;">${this.escapeHtml(newVal)}</td></tr>`;
+            } else if (newVal === undefined) {
+                // Deleted
+                html += `<tr style="background-color: #fee2e2;"><td style="font-weight:bold; padding-right:5px; vertical-align: top; color: #991b1b;">- ${this.escapeHtml(key)}</td><td style="word-break: break-word; color: #991b1b;">${this.escapeHtml(oldVal)}</td></tr>`;
+            } else {
+                // Modified
+                html += `<tr style="background-color: #fff7ed;"><td style="font-weight:bold; padding-right:5px; vertical-align: top; color: #9a3412;">~ ${this.escapeHtml(key)}</td><td style="word-break: break-word;"><span style="background-color: #fee2e2; text-decoration: line-through; color: #991b1b; margin-right: 4px;">${this.escapeHtml(oldVal)}</span> <span style="background-color: #dcfce7; color: #166534;">${this.escapeHtml(newVal)}</span></td></tr>`;
+            }
+        }
+        html += '</table>';
+        return html;
     }
 
     getChangeColor(type, version) {
