@@ -535,7 +535,7 @@ class ChangesetViewer {
 
         // Update the header with count
         const header = document.getElementById('changesetListHeader');
-        header.innerHTML = `Changesets <span style="font-size: 0.875rem; color: #94a3b8; font-weight: 400;">(${this.changesets.length.toLocaleString()})</span>`;
+        header.innerHTML = `Changesets <span class="header-count">(${this.changesets.length.toLocaleString()})</span>`;
 
         console.log('renderChangesets called with', this.changesets.length, 'changesets');
 
@@ -1208,16 +1208,16 @@ class ChangesetViewer {
             tagsHtml = this.generateTagsTable(tags);
         }
 
-        const changeColor = this.getChangeColor(props.changeType, props.version);
+        const changeClass = this.getChangeClass(props.changeType, props.version);
 
         const content = `
-            <div style="font-size: 0.9rem; max-width: 300px;">
-                <h3 style="margin: 0 0 5px 0; font-size: 1rem;">${props.type}/${props.id}</h3>
-                <div style="margin-bottom: 8px;">
-                    <span style="font-weight: bold; text-transform: capitalize; color: ${changeColor}">${props.changeType}</span>
-                    ${props.version ? `<span style="color: #666;">(${props.version})</span>` : ''}
+            <div class="popup-content">
+                <h3>${props.type}/${props.id}</h3>
+                <div class="popup-meta">
+                    <span class="change-type ${changeClass}">${props.changeType}</span>
+                    ${props.version ? `<span class="version-text">(${props.version})</span>` : ''}
                 </div>
-                ${tagsHtml ? `<div style="margin-top: 5px; border-top: 1px solid #eee; padding-top: 5px;">${tagsHtml}</div>` : ''}
+                ${tagsHtml ? `<div class="popup-tags">${tagsHtml}</div>` : ''}
             </div>
         `;
 
@@ -1229,9 +1229,9 @@ class ChangesetViewer {
 
     generateTagsTable(tags) {
         if (Object.keys(tags).length === 0) return '';
-        let html = '<table style="width:100%; font-size: 0.8rem; border-collapse: collapse;">';
+        let html = '<table class="popup-table">';
         for (const [k, v] of Object.entries(tags)) {
-            html += `<tr><td style="font-weight:bold; padding-right:5px; vertical-align: top;">${this.escapeHtml(k)}</td><td style="word-break: break-word;">${this.escapeHtml(v)}</td></tr>`;
+            html += `<tr><td>${this.escapeHtml(k)}</td><td>${this.escapeHtml(v)}</td></tr>`;
         }
         html += '</table>';
         return html;
@@ -1241,7 +1241,7 @@ class ChangesetViewer {
         const allKeys = new Set([...Object.keys(oldTags), ...Object.keys(newTags)]);
         if (allKeys.size === 0) return '';
 
-        let html = '<table style="width:100%; font-size: 0.8rem; border-collapse: collapse;">';
+        let html = '<table class="popup-table">';
         const sortedKeys = Array.from(allKeys).sort();
 
         for (const key of sortedKeys) {
@@ -1250,22 +1250,30 @@ class ChangesetViewer {
 
             if (oldVal === newVal) {
                 // Unchanged
-                html += `<tr><td style="font-weight:bold; padding-right:5px; vertical-align: top; color: #666;">${this.escapeHtml(key)}</td><td style="word-break: break-word; color: #666;">${this.escapeHtml(newVal)}</td></tr>`;
+                html += `<tr><td class="version-text">${this.escapeHtml(key)}</td><td class="version-text">${this.escapeHtml(newVal)}</td></tr>`;
             } else if (oldVal === undefined) {
                 // Added
-                html += `<tr style="background-color: #dcfce7;"><td style="font-weight:bold; padding-right:5px; vertical-align: top; color: #166534;">+ ${this.escapeHtml(key)}</td><td style="word-break: break-word; color: #166534;">${this.escapeHtml(newVal)}</td></tr>`;
+                html += `<tr class="diff-add"><td>+ ${this.escapeHtml(key)}</td><td>${this.escapeHtml(newVal)}</td></tr>`;
             } else if (newVal === undefined) {
                 // Deleted
-                html += `<tr style="background-color: #fee2e2;"><td style="font-weight:bold; padding-right:5px; vertical-align: top; color: #991b1b;">- ${this.escapeHtml(key)}</td><td style="word-break: break-word; color: #991b1b;">${this.escapeHtml(oldVal)}</td></tr>`;
+                html += `<tr class="diff-del"><td>- ${this.escapeHtml(key)}</td><td>${this.escapeHtml(oldVal)}</td></tr>`;
             } else {
                 // Modified
-                html += `<tr style="background-color: #fff7ed;"><td style="font-weight:bold; padding-right:5px; vertical-align: top; color: #9a3412;">~ ${this.escapeHtml(key)}</td><td style="word-break: break-word;"><span style="background-color: #fee2e2; text-decoration: line-through; color: #991b1b; margin-right: 4px;">${this.escapeHtml(oldVal)}</span> <span style="background-color: #dcfce7; color: #166534;">${this.escapeHtml(newVal)}</span></td></tr>`;
+                html += `<tr class="diff-mod"><td class="diff-mod-key">~ ${this.escapeHtml(key)}</td><td><span class="diff-old-val">${this.escapeHtml(oldVal)}</span> <span class="diff-new-val">${this.escapeHtml(newVal)}</span></td></tr>`;
             }
         }
         html += '</table>';
         return html;
     }
 
+    getChangeClass(type, version) {
+        if (type === 'create') return 'text-create';
+        if (type === 'delete') return 'text-delete';
+        if (type === 'modify') return version === 'new' ? 'text-modify-new' : 'text-modify-old';
+        return '';
+    }
+
+    // Deprecated: kept for reference if needed, but replaced by getChangeClass
     getChangeColor(type, version) {
         if (type === 'create') return '#10b981';
         if (type === 'delete') return '#ef4444';
@@ -1280,7 +1288,7 @@ class ChangesetViewer {
         const createdBy = changeset.tags && changeset.tags['created_by'];
         const createdByHtml = createdBy ? `
             <p><i class="ph ph-wrench" title="Editor"></i> ${this.escapeHtml(createdBy)}
-               <button class="filter-tag-btn" title="Filter by this editor" data-tag="created_by=${this.escapeHtml(createdBy)}" style="background: none; border: none; cursor: pointer; padding: 0 4px; font-size: 0.875rem;"><i class="ph ph-magnifying-glass"></i></button>
+               <button class="filter-tag-btn btn-filter-inline" title="Filter by this editor" data-tag="created_by=${this.escapeHtml(createdBy)}"><i class="ph ph-magnifying-glass"></i></button>
             </p>` : '';
 
         const comment = changeset.tags?.comment || '';
@@ -1288,27 +1296,27 @@ class ChangesetViewer {
         const tagRows = Object.entries(changeset.tags || {})
             .map(([key, value]) => `
                 <tr>
-                    <td style="padding: 4px 8px; border-bottom: 1px solid #e2e8f0; font-weight: 500; color: #334155;">${this.escapeHtml(key)}</td>
-                    <td style="padding: 4px 8px; border-bottom: 1px solid #e2e8f0; color: #0f172a;">${this.escapeHtml(value)}</td>
+                    <td>${this.escapeHtml(key)}</td>
+                    <td>${this.escapeHtml(value)}</td>
                 </tr>
             `).join('');
 
         const panelContent = document.getElementById('panelContent');
         panelContent.innerHTML = `
-            <div class="panel-header" style="flex-direction: column; align-items: flex-start; gap: 8px;">
-                <div style="display: flex; align-items: center; width: 100%; justify-content: space-between;">
-                    <h2 style="margin: 0; font-size: 1.25rem;">Changeset #${changeset.id}</h2>
+            <div class="panel-header">
+                <div class="panel-title-row">
+                    <h2>Changeset #${changeset.id}</h2>
                     <span class="changeset-status ${statusClass}">${status}</span>
                 </div>
-                <div style="display: flex; gap: 12px; font-size: 0.8rem;">
+                <div class="panel-links">
                     <a href="https://www.openstreetmap.org/changeset/${changeset.id}"
                        target="_blank"
-                       style="color: #94a3b8; text-decoration: none; display: flex; align-items: center; gap: 2px;" title="View on OpenStreetMap">
+                       class="panel-link" title="View on OpenStreetMap">
                         View on OSM <i class="ph ph-arrow-square-out"></i>
                     </a>
                     <a href="https://osmcha.org/changesets/${changeset.id}"
                        target="_blank"
-                       style="color: #94a3b8; text-decoration: none; display: flex; align-items: center; gap: 2px;" title="View on OSMCha">
+                       class="panel-link" title="View on OSMCha">
                         View on OSMCha <i class="ph ph-arrow-square-out"></i>
                     </a>
                 </div>
@@ -1316,27 +1324,27 @@ class ChangesetViewer {
 
             <div class="panel-grid">
                 <div class="panel-section">
-                    ${comment ? `<div style="background: #f8fafc; padding: 8px; border-radius: 4px; border: 1px solid #e2e8f0; margin-bottom: 12px; font-style: italic;">${this.escapeHtml(comment)}</div>` : ''}
+                    ${comment ? `<div class="panel-comment">${this.escapeHtml(comment)}</div>` : ''}
                     <p><i class="ph ph-user" title="User"></i> ${this.escapeHtml(changeset.user_name || 'Unknown')}
-                       <button class="filter-user-btn" title="Filter by this user" data-username="${this.escapeHtml(changeset.user_name || '')}" style="background: none; border: none; cursor: pointer; padding: 0 4px; font-size: 0.875rem;"><i class="ph ph-magnifying-glass"></i></button>
-                       ${changeset.user_id ? `<span style="color: #94a3b8; font-size: 0.875rem;">(ID: ${changeset.user_id})</span>` : ''}</p>
+                       <button class="filter-user-btn btn-filter-inline" title="Filter by this user" data-username="${this.escapeHtml(changeset.user_name || '')}"><i class="ph ph-magnifying-glass"></i></button>
+                       ${changeset.user_id ? `<span class="user-id">(ID: ${changeset.user_id})</span>` : ''}</p>
                     ${createdByHtml}
                     <p><i class="ph ph-pencil-simple" title="Changes count"></i> ${changeset.num_changes || 0} changes</p>
                     <p><i class="ph ph-chat-circle" title="Comments count"></i> ${changeset.comments_count || 0} comments</p>
                     <p><i class="ph ph-calendar" title="Created at"></i> ${new Date(changeset.created_at).toLocaleString()}</p>
-                    <p><i class="ph ph-prohibit" title="Closed at"></i> ${changeset.closed_at ? new Date(changeset.closed_at).toLocaleString() : '<span style="color: #94a3b8; font-size: 0.875rem;">(Still open)</span>'}</p>
+                    <p><i class="ph ph-prohibit" title="Closed at"></i> ${changeset.closed_at ? new Date(changeset.closed_at).toLocaleString() : '<span class="status-text-muted">(Still open)</span>'}</p>
                 </div>
 
                 <div class="panel-section">
                     <details>
-                        <summary style="cursor: pointer; font-weight: 600; color: #475569; user-select: none;">Tags</summary>
+                        <summary class="tags-summary">Tags</summary>
                         ${tagRows ? `
-                            <div style="overflow-x: auto; margin-top: 8px;">
-                                <table style="width: 100%; border-collapse: collapse; font-size: 0.875rem; text-align: left;">
+                            <div class="tags-table-container">
+                                <table class="tags-table">
                                     <thead>
                                         <tr style="background-color: #f1f5f9;">
-                                            <th style="padding: 8px; border-bottom: 2px solid #cbd5e1; width: 30%;">Key</th>
-                                            <th style="padding: 8px; border-bottom: 2px solid #cbd5e1;">Value</th>
+                                            <th>Key</th>
+                                            <th>Value</th>
                                         </tr>
                                     </thead>
                                     <tbody>
@@ -1344,7 +1352,7 @@ class ChangesetViewer {
                                     </tbody>
                                 </table>
                             </div>
-                        ` : '<p style="color: #64748b; font-style: italic; margin-top: 8px;">No tags</p>'}
+                        ` : '<p class="no-tags">No tags</p>'}
                     </details>
                 </div>
             </div>
@@ -1882,7 +1890,7 @@ class ChangesetViewer {
         if (filters.length > 0) {
             summary.innerHTML = filters.join('');
         } else {
-            summary.innerHTML = '<span style="color: #94a3b8; font-style: italic;">No filters applied</span>';
+            summary.innerHTML = '<span class="empty-filters">No filters applied</span>';
         }
     }
 }
