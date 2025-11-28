@@ -577,10 +577,10 @@ class ChangesetViewer {
                     <span class="changeset-id">#${changeset.id}</span>
                     <span class="changeset-status ${statusClass}">${status}</span>
                 </div>
-                <div class="changeset-user">👤 ${this.escapeHtml(changeset.user_name || 'Unknown')}</div>
+                <div class="changeset-user"><i class="ph ph-user" title="User"></i> ${this.escapeHtml(changeset.user_name || 'Unknown')}</div>
                 <div class="changeset-meta">
-                    <span>📝 ${changeset.num_changes || 0} changes</span>
-                    <span>🕐 ${timeAgo}</span>
+                    <span><i class="ph ph-pencil-simple" title="Changes count"></i> ${changeset.num_changes || 0} changes</span>
+                    <span><i class="ph ph-clock" title="Time ago"></i> ${timeAgo}</span>
                 </div>
                 ${commentHtml}
             </div>
@@ -1279,8 +1279,8 @@ class ChangesetViewer {
 
         const createdBy = changeset.tags && changeset.tags['created_by'];
         const createdByHtml = createdBy ? `
-            <p>🛠️ ${this.escapeHtml(createdBy)}
-               <button class="filter-tag-btn" title="Filter by this editor" data-tag="created_by=${this.escapeHtml(createdBy)}" style="background: none; border: none; cursor: pointer; padding: 0 4px; font-size: 0.875rem;">🔍</button>
+            <p><i class="ph ph-wrench" title="Editor"></i> ${this.escapeHtml(createdBy)}
+               <button class="filter-tag-btn" title="Filter by this editor" data-tag="created_by=${this.escapeHtml(createdBy)}" style="background: none; border: none; cursor: pointer; padding: 0 4px; font-size: 0.875rem;"><i class="ph ph-magnifying-glass"></i></button>
             </p>` : '';
 
         const comment = changeset.tags?.comment || '';
@@ -1303,13 +1303,13 @@ class ChangesetViewer {
                 <div style="display: flex; gap: 12px; font-size: 0.8rem;">
                     <a href="https://www.openstreetmap.org/changeset/${changeset.id}"
                        target="_blank"
-                       style="color: #94a3b8; text-decoration: none; display: flex; align-items: center; gap: 2px;">
-                        View on OSM ↗
+                       style="color: #94a3b8; text-decoration: none; display: flex; align-items: center; gap: 2px;" title="View on OpenStreetMap">
+                        View on OSM <i class="ph ph-arrow-square-out"></i>
                     </a>
                     <a href="https://osmcha.org/changesets/${changeset.id}"
                        target="_blank"
-                       style="color: #94a3b8; text-decoration: none; display: flex; align-items: center; gap: 2px;">
-                        View on OSMCha ↗
+                       style="color: #94a3b8; text-decoration: none; display: flex; align-items: center; gap: 2px;" title="View on OSMCha">
+                        View on OSMCha <i class="ph ph-arrow-square-out"></i>
                     </a>
                 </div>
             </div>
@@ -1317,14 +1317,14 @@ class ChangesetViewer {
             <div class="panel-grid">
                 <div class="panel-section">
                     ${comment ? `<div style="background: #f8fafc; padding: 8px; border-radius: 4px; border: 1px solid #e2e8f0; margin-bottom: 12px; font-style: italic;">${this.escapeHtml(comment)}</div>` : ''}
-                    <p>👤 ${this.escapeHtml(changeset.user_name || 'Unknown')}
-                       <button class="filter-user-btn" title="Filter by this user" data-username="${this.escapeHtml(changeset.user_name || '')}" style="background: none; border: none; cursor: pointer; padding: 0 4px; font-size: 0.875rem;">🔍</button>
+                    <p><i class="ph ph-user" title="User"></i> ${this.escapeHtml(changeset.user_name || 'Unknown')}
+                       <button class="filter-user-btn" title="Filter by this user" data-username="${this.escapeHtml(changeset.user_name || '')}" style="background: none; border: none; cursor: pointer; padding: 0 4px; font-size: 0.875rem;"><i class="ph ph-magnifying-glass"></i></button>
                        ${changeset.user_id ? `<span style="color: #94a3b8; font-size: 0.875rem;">(ID: ${changeset.user_id})</span>` : ''}</p>
                     ${createdByHtml}
-                    <p>📝 ${changeset.num_changes || 0} changes</p>
-                    <p>💬 ${changeset.comments_count || 0} comments</p>
-                    <p>📅 ${new Date(changeset.created_at).toLocaleString()}</p>
-                    <p>🚫 ${changeset.closed_at ? new Date(changeset.closed_at).toLocaleString() : '<span style="color: #94a3b8; font-size: 0.875rem;">(Still open)</span>'}</p>
+                    <p><i class="ph ph-pencil-simple" title="Changes count"></i> ${changeset.num_changes || 0} changes</p>
+                    <p><i class="ph ph-chat-circle" title="Comments count"></i> ${changeset.comments_count || 0} comments</p>
+                    <p><i class="ph ph-calendar" title="Created at"></i> ${new Date(changeset.created_at).toLocaleString()}</p>
+                    <p><i class="ph ph-prohibit" title="Closed at"></i> ${changeset.closed_at ? new Date(changeset.closed_at).toLocaleString() : '<span style="color: #94a3b8; font-size: 0.875rem;">(Still open)</span>'}</p>
                 </div>
 
                 <div class="panel-section">

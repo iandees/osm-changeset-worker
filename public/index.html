@@ -5,6 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>OSM Changeset Viewer</title>
     <link href="https://unpkg.com/maplibre-gl@4.0.0/dist/maplibre-gl.css" rel="stylesheet" />
+    <script src="https://unpkg.com/@phosphor-icons/web"></script>
     <link rel="stylesheet" href="/style.css">
 </head>
 <body>
@@ -12,7 +13,7 @@
         <!-- Sidebar -->
         <aside class="sidebar">
             <div class="sidebar-header">
-                <h1>🗺️ OSM Changeset Viewer</h1>
+                <h1><i class="ph ph-map-trifold"></i> OSM Changeset Viewer</h1>
                 <p class="subtitle">Explore OpenStreetMap changesets in real-time</p>
             </div>
 
@@ -22,7 +23,7 @@
                     <h2>Filters</h2>
                     <div class="filters-summary" id="filtersSummary"></div>
                     <button class="filters-toggle" id="filtersToggle" aria-label="Toggle filters">
-                        <span class="toggle-icon">▼</span>
+                        <span class="toggle-icon"><i class="ph ph-caret-down"></i></span>
                     </button>
                 </div>
                 <div class="filters-content" id="filtersContent">
@@ -51,13 +52,13 @@
                             <input type="number" id="bboxMaxLat" placeholder="Max Lat" step="0.0001" />
                         </div>
                         <button id="drawBbox" class="btn btn-secondary" style="margin-bottom: 0.5rem;">
-                            📍 Draw Bounding Box on Map
+                            <i class="ph ph-bounding-box"></i> Draw Bounding Box on Map
                         </button>
                         <button id="useMapBounds" class="btn btn-secondary" style="margin-bottom: 0.5rem;">
-                            👁️ Use Current View
+                            <i class="ph ph-eye"></i> Use Current View
                         </button>
                         <button id="clearBbox" class="btn btn-secondary" style="display: none;">
-                            ✕ Clear Bounding Box
+                            <i class="ph ph-x"></i> Clear Bounding Box
                         </button>
                     </div>
 
@@ -85,7 +86,12 @@
             <div class="changeset-list">
                 <div class="changeset-list-header-container">
                     <h2 id="changesetListHeader">Changesets</h2>
-                    <a id="rssLink" href="#" target="_blank" title="RSS Feed">📡</a>
+                    <div style="display: flex; gap: 8px; align-items: center;">
+                        <button id="refreshData" title="Refresh data" style="background: none; border: none; cursor: pointer; padding: 0; font-size: 1.1rem; color: #64748b;">
+                            <i class="ph ph-arrows-clockwise"></i>
+                        </button>
+                        <a id="rssLink" href="#" target="_blank" title="RSS Feed"><i class="ph ph-rss"></i></a>
+                    </div>
                 </div>
                 <div id="changesetItems" class="changeset-items">
                     <div class="loading">Loading changesets...</div>
@@ -97,17 +103,14 @@
         <main class="map-container">
             <div id="map"></div>
             <div class="map-controls">
-                <button id="refreshData" class="btn btn-icon" title="Refresh data">
-                    🔄
-                </button>
                 <button id="fitBounds" class="btn btn-icon" title="Fit all changesets">
-                    🎯
+                    <i class="ph ph-corners-out"></i>
                 </button>
             </div>
 
             <!-- Changeset Detail Panel -->
             <div id="changesetDetailPanel" class="changeset-detail-panel">
-                <button id="closePanel" class="panel-close-btn">&times;</button>
+                <button id="closePanel" class="panel-close-btn"><i class="ph ph-x"></i></button>
                 <div id="panelContent"></div>
             </div>
         </main>
