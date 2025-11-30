@@ -12,6 +12,13 @@ A Cloudflare Worker that tracks OpenStreetMap changesets in real-time. It fetche
   - Number of changes and comments
   - All changeset tags
 - **RESTful API**: Query changesets with various filters
+- **Web Interface**:
+  - Interactive map visualization using MapLibre GL
+  - **Augmented Diff (Adiff)** visualization to see exactly what changed (geometry and tags)
+  - Real-time filtering by user, tags, bounding box, and size
+  - Keyboard shortcuts for rapid review (`j`/`k` navigation, `r` read status)
+  - Read/Unread status tracking (local storage)
+  - RSS feed generation for custom filters
 - **OSMCha-Compatible**: API format similar to OSMCha for easy integration
 
 ## Setup
@@ -74,16 +81,20 @@ npm run deploy
 List changesets with optional filters.
 
 **Query Parameters:**
+- `user_name` - Filter by OSM username
 - `user_id` - Filter by OSM user ID
 - `start_date` - Filter by start date (ISO 8601 format)
 - `end_date` - Filter by end date (ISO 8601 format)
 - `bbox` - Bounding box filter (format: `min_lon,min_lat,max_lon,max_lat`)
+- `bbox_size_min` - Minimum bounding box area (square degrees)
+- `bbox_size_max` - Maximum bounding box area (square degrees)
+- `tags` - Filter by tags (e.g., `key=value`, `key!=value`, `key~value`). Can be specified multiple times.
 - `limit` - Maximum number of results (default: 100)
 - `offset` - Offset for pagination (default: 0)
 
 **Example:**
 ```bash
-curl "https://your-worker.workers.dev/api/changesets?user_id=123456&limit=10"
+curl "https://your-worker.workers.dev/api/changesets?user_name=mapper&limit=10"
 ```
 
 **Response:**
@@ -125,6 +136,15 @@ Get a single changeset by ID.
 **Example:**
 ```bash
 curl "https://your-worker.workers.dev/api/changesets/123456789"
+```
+
+### GET /api/changesets/:id/adiff
+
+Get the augmented diff (Adiff) for a changeset in GeoJSON format, showing created, modified, and deleted elements.
+
+**Example:**
+```bash
+curl "https://your-worker.workers.dev/api/changesets/123456789/adiff"
 ```
 
 ### GET /api/stats
