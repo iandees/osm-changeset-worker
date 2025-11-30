@@ -415,35 +415,6 @@ input::placeholder {
     border-color: #64748b;
 }
 
-/* Stats */
-.stats {
-    padding: 1rem;
-    border-bottom: 1px solid var(--border-color);
-}
-
-.stats h2 {
-    font-size: 1rem;
-    font-weight: 600;
-    margin-bottom: 1rem;
-    color: var(--text-primary);
-}
-
-.stat-item {
-    display: flex;
-    justify-content: space-between;
-    padding: 0.5rem 0;
-    font-size: 0.875rem;
-}
-
-.stat-label {
-    color: var(--text-secondary);
-}
-
-.stat-value {
-    font-weight: 600;
-    color: var(--primary-color);
-}
-
 /* Changeset List */
 .changeset-list {
     flex: 1;

@@ -7,9 +7,7 @@ import {
   queryChangesets,
   getChangesetById,
   getUserNames,
-  getUserIdsByName,
-  getTopMappers24h,
-  getTopEditors24h
+  getUserIdsByName
 } from './database';
 import { validateBbox } from './utils';
 
@@ -234,26 +232,6 @@ api.get('/users/by-name/:name', async (c) => {
   } catch (error) {
     console.error('Error fetching user IDs:', error);
     return c.json({ error: 'Failed to fetch user IDs' }, 500);
-  }
-});
-
-/**
- * GET /api/stats/24h - Get statistics for the last 24 hours
- */
-api.get('/stats/24h', async (c) => {
-  try {
-    const [topMappers, topEditors] = await Promise.all([
-      getTopMappers24h(c.env.DB),
-      getTopEditors24h(c.env.DB)
-    ]);
-
-    return c.json({
-      top_mappers: topMappers,
-      top_editors: topEditors
-    });
-  } catch (error) {
-    console.error('Error fetching 24h stats:', error);
-    return c.json({ error: 'Failed to fetch stats' }, 500);
   }
 });
 

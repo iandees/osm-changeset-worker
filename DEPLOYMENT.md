@@ -194,7 +194,7 @@ wrangler d1 export osm-changesets --output=backup.sql
 ### Check Database Size
 
 ```bash
-wrangler d1 execute osm-changesets --command="SELECT 
+wrangler d1 execute osm-changesets --command="SELECT
   (SELECT COUNT(*) FROM changesets) as changesets,
   (SELECT COUNT(*) FROM changeset_tags) as tags"
 ```
@@ -205,7 +205,7 @@ To keep only recent changesets:
 
 ```bash
 wrangler d1 execute osm-changesets --command="
-DELETE FROM changesets 
+DELETE FROM changesets
 WHERE created_at < datetime('now', '-30 days')"
 ```
 

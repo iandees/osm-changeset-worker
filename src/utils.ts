@@ -54,13 +54,13 @@ export async function retry<T>(
   initialDelay: number = 1000
 ): Promise<T> {
   let lastError: Error | undefined;
-  
+
   for (let i = 0; i < maxRetries; i++) {
     try {
       return await fn();
     } catch (error) {
       lastError = error instanceof Error ? error : new Error(String(error));
-      
+
       if (i < maxRetries - 1) {
         const delay = initialDelay * Math.pow(2, i);
         console.log(`Retry ${i + 1}/${maxRetries} after ${delay}ms...`);
@@ -68,7 +68,7 @@ export async function retry<T>(
       }
     }
   }
-  
+
   throw lastError || new Error('Retry failed');
 }
 
