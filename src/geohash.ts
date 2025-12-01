@@ -97,10 +97,15 @@ function getOptimalPrecision(minLon: number, minLat: number, maxLon: number, max
   return 5;
 }
 
-// Used for INDEXING: Get covering hashes at the single optimal precision
+// Used for INDEXING: Get covering hashes at the optimal precision and lower precisions
 export function getCoveringGeohashes(minLon: number, minLat: number, maxLon: number, maxLat: number): string[] {
-  const precision = getOptimalPrecision(minLon, minLat, maxLon, maxLat);
-  return getGeohashesAtPrecision(minLon, minLat, maxLon, maxLat, precision);
+  const optimalPrecision = getOptimalPrecision(minLon, minLat, maxLon, maxLat);
+  const geohashes = new Set<string>();
+  for (let p = 2; p <= optimalPrecision; p++) {
+    const layerHashes = getGeohashesAtPrecision(minLon, minLat, maxLon, maxLat, p);
+    layerHashes.forEach(h => geohashes.add(h));
+  }
+  return Array.from(geohashes);
 }
 
 // Used for QUERYING: Get covering hashes at ALL precisions
