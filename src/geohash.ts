@@ -112,10 +112,12 @@ export function getCoveringGeohashes(minLon: number, minLat: number, maxLon: num
 // Returns null if too many hashes (implies query area is too large for index)
 export function getSearchGeohashes(minLon: number, minLat: number, maxLon: number, maxLat: number): string[] | null {
   const hashes = new Set<string>();
-  const MAX_HASHES = 200; // Limit to prevent massive queries
+  const MAX_HASHES = 2000; // Limit to prevent massive queries
 
-  // Check all precisions we support (2 to 5)
-  for (let p = 2; p <= 5; p++) {
+  const maxPrecision = getOptimalPrecision(minLon, minLat, maxLon, maxLat);
+
+  // Check precisions up to the optimal precision for the query box
+  for (let p = 2; p <= maxPrecision; p++) {
     const layerHashes = getGeohashesAtPrecision(minLon, minLat, maxLon, maxLat, p);
 
     if (hashes.size + layerHashes.length > MAX_HASHES) {
