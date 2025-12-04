@@ -1,6 +1,11 @@
 name = "osm-changeset-worker"
 main = "src/index.ts"
 compatibility_date = "2024-01-01"
+workers_dev = true
+preview_urls = true
+routes = [
+	{ pattern = "changesets.mapki.com", custom_domain = true }
+]
 
 # Serve static assets
 [assets]
