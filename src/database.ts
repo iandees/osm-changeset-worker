@@ -56,6 +56,10 @@ export async function storeChangeset(db: D1Database, changeset: Changeset): Prom
     changeset.comments_count || 0,
     tagsJson
   ).run();
+
+  if (changeset.user_id && changeset.user_name) {
+    await updateUserName(db, changeset.user_id, changeset.user_name, changeset.created_at);
+  }
 }
 
 /**
@@ -100,7 +104,36 @@ export async function storeChangesets(db: D1Database, changesets: any[]) {
     }
   });
 
-  await db.batch([...batch, ...geohashBatch]);
+  // Update user_names table
+  const userStmt = db.prepare(`
+    INSERT INTO user_names (user_id, user_name, first_seen, last_seen)
+    VALUES (?, ?, ?, ?)
+    ON CONFLICT(user_id, user_name) DO UPDATE SET
+      last_seen = excluded.last_seen
+  `);
+
+  const userMap = new Map<string, { userId: number, userName: string, timestamp: string }>();
+
+  changesets.forEach(cs => {
+    if (cs.user_id && cs.user_name) {
+      const key = `${cs.user_id}:${cs.user_name}`;
+      const existing = userMap.get(key);
+      // If we have multiple entries for the same user/name pair, keep the one with the latest timestamp
+      if (!existing || new Date(cs.created_at) > new Date(existing.timestamp)) {
+        userMap.set(key, {
+          userId: cs.user_id,
+          userName: cs.user_name,
+          timestamp: cs.created_at
+        });
+      }
+    }
+  });
+
+  const userBatch = Array.from(userMap.values()).map(u =>
+    userStmt.bind(u.userId, u.userName, u.timestamp, u.timestamp)
+  );
+
+  await db.batch([...batch, ...geohashBatch, ...userBatch]);
 }
 
 /**
