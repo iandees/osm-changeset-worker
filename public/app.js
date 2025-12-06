@@ -1539,36 +1539,39 @@ class ChangesetViewer {
     formatTagValue(text, key) {
         if (!text) return '';
 
+        // Normalize newlines: replace &#10; and &#13; with actual newlines
+        const normalizedText = text.replace(/&#10;/g, '\n').replace(/&#13;/g, '\r');
+
         // Handle Wikidata
         if (key && (key === 'wikidata' || key.endsWith(':wikidata'))) {
-            if (/^Q\d+$/.test(text)) {
-                const url = `https://www.wikidata.org/wiki/${text}`;
-                return `<a href="${url}" target="_blank" rel="nofollow noreferrer">${this.escapeHtml(text)}</a>`;
+            if (/^Q\d+$/.test(normalizedText)) {
+                const url = `https://www.wikidata.org/wiki/${normalizedText}`;
+                return `<a href="${url}" target="_blank" rel="nofollow noreferrer">${this.escapeHtml(normalizedText)}</a>`;
             }
         }
 
         // Handle Wikipedia
         if (key && (key === 'wikipedia' || key.endsWith(':wikipedia'))) {
-            const match = text.match(/^([a-z-]+):(.+)$/);
+            const match = normalizedText.match(/^([a-z-]+):(.+)$/);
             if (match) {
                 const lang = match[1];
                 const article = match[2];
                 const url = `https://${lang}.wikipedia.org/wiki/${encodeURIComponent(article.replace(/ /g, '_'))}`;
-                return `<a href="${url}" target="_blank" rel="nofollow noreferrer">${this.escapeHtml(text)}</a>`;
+                return `<a href="${url}" target="_blank" rel="nofollow noreferrer">${this.escapeHtml(normalizedText)}</a>`;
             }
         }
 
         // Simple regex for URLs starting with http/https
         const urlRegex = /(https?:\/\/[^\s]+)/g;
 
-        return text.split(urlRegex).map(part => {
+        return normalizedText.split(urlRegex).map(part => {
             if (part.match(/^https?:\/\//)) {
                 // It's a URL
                 const url = this.escapeHtml(part);
                 return `<a href="${url}" target="_blank" rel="nofollow noreferrer">${url}</a>`;
             } else {
                 // It's regular text
-                return this.escapeHtml(part);
+                return this.escapeHtml(part).replace(/\n/g, '<br>');
             }
         }).join('');
     }
