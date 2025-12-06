@@ -1288,7 +1288,7 @@ class ChangesetViewer {
         if (Object.keys(tags).length === 0) return '';
         let html = '<table class="popup-table">';
         for (const [k, v] of Object.entries(tags)) {
-            html += `<tr><td>${this.escapeHtml(k)}</td><td>${this.escapeHtml(v)}</td></tr>`;
+            html += `<tr><td>${this.escapeHtml(k)}</td><td>${this.formatTagValue(v, k)}</td></tr>`;
         }
         html += '</table>';
         return html;
@@ -1307,16 +1307,16 @@ class ChangesetViewer {
 
             if (oldVal === newVal) {
                 // Unchanged
-                html += `<tr><td class="version-text">${this.escapeHtml(key)}</td><td class="version-text">${this.escapeHtml(newVal)}</td></tr>`;
+                html += `<tr><td class="version-text">${this.escapeHtml(key)}</td><td class="version-text">${this.formatTagValue(newVal, key)}</td></tr>`;
             } else if (oldVal === undefined) {
                 // Added
-                html += `<tr class="diff-add"><td>+ ${this.escapeHtml(key)}</td><td>${this.escapeHtml(newVal)}</td></tr>`;
+                html += `<tr class="diff-add"><td>+ ${this.escapeHtml(key)}</td><td>${this.formatTagValue(newVal, key)}</td></tr>`;
             } else if (newVal === undefined) {
                 // Deleted
-                html += `<tr class="diff-del"><td>- ${this.escapeHtml(key)}</td><td>${this.escapeHtml(oldVal)}</td></tr>`;
+                html += `<tr class="diff-del"><td>- ${this.escapeHtml(key)}</td><td>${this.formatTagValue(oldVal, key)}</td></tr>`;
             } else {
                 // Modified
-                html += `<tr class="diff-mod"><td class="diff-mod-key">~ ${this.escapeHtml(key)}</td><td><span class="diff-old-val">${this.escapeHtml(oldVal)}</span> <span class="diff-new-val">${this.escapeHtml(newVal)}</span></td></tr>`;
+                html += `<tr class="diff-mod"><td class="diff-mod-key">~ ${this.escapeHtml(key)}</td><td><span class="diff-old-val">${this.formatTagValue(oldVal, key)}</span> <span class="diff-new-val">${this.formatTagValue(newVal, key)}</span></td></tr>`;
             }
         }
         html += '</table>';
@@ -1354,7 +1354,7 @@ class ChangesetViewer {
             .map(([key, value]) => `
                 <tr>
                     <td>${this.escapeHtml(key)}</td>
-                    <td>${this.escapeHtml(value)}</td>
+                    <td>${this.formatTagValue(value, key)}</td>
                 </tr>
             `).join('');
 
@@ -1534,6 +1534,43 @@ class ChangesetViewer {
         }
 
         return 'just now';
+    }
+
+    formatTagValue(text, key) {
+        if (!text) return '';
+
+        // Handle Wikidata
+        if (key && (key === 'wikidata' || key.endsWith(':wikidata'))) {
+            if (/^Q\d+$/.test(text)) {
+                const url = `https://www.wikidata.org/wiki/${text}`;
+                return `<a href="${url}" target="_blank" rel="nofollow noreferrer">${this.escapeHtml(text)}</a>`;
+            }
+        }
+
+        // Handle Wikipedia
+        if (key && (key === 'wikipedia' || key.endsWith(':wikipedia'))) {
+            const match = text.match(/^([a-z-]+):(.+)$/);
+            if (match) {
+                const lang = match[1];
+                const article = match[2];
+                const url = `https://${lang}.wikipedia.org/wiki/${encodeURIComponent(article.replace(/ /g, '_'))}`;
+                return `<a href="${url}" target="_blank" rel="nofollow noreferrer">${this.escapeHtml(text)}</a>`;
+            }
+        }
+
+        // Simple regex for URLs starting with http/https
+        const urlRegex = /(https?:\/\/[^\s]+)/g;
+
+        return text.split(urlRegex).map(part => {
+            if (part.match(/^https?:\/\//)) {
+                // It's a URL
+                const url = this.escapeHtml(part);
+                return `<a href="${url}" target="_blank" rel="nofollow noreferrer">${url}</a>`;
+            } else {
+                // It's regular text
+                return this.escapeHtml(part);
+            }
+        }).join('');
     }
 
     escapeHtml(text) {
