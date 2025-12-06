@@ -347,7 +347,7 @@ function convertAdiffToGeoJSON(xmlData: string) {
 function generateRss(changesets: any[]): string {
   const items = changesets.map(cs => {
     const title = `Changeset ${cs.id} by ${cs.user_name}`;
-    const link = `https://www.openstreetmap.org/changeset/${cs.id}`;
+    const link = `https://changesets.mapki.com/changeset/${cs.id}`;
     const date = new Date(cs.created_at).toUTCString();
     const comment = cs.tags?.comment || '(no comment)';
 
@@ -376,7 +376,7 @@ function generateRss(changesets: any[]): string {
   <channel>
     <title>OSM Changeset Feed</title>
     <description>Recent OSM changesets</description>
-    <link>https://www.openstreetmap.org</link>
+    <link>https://changesets.mapki.com</link>
     <lastBuildDate>${new Date().toUTCString()}</lastBuildDate>
     <pubDate>${new Date().toUTCString()}</pubDate>
 ${items}

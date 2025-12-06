@@ -13,6 +13,7 @@ class ChangesetViewer {
         this.adiffData = null; // Store adiff GeoJSON data
         this.focusedIndex = -1; // Track focused changeset in list
         this.readChangesets = new Set(); // Track read changesets
+        this.initialChangesetId = null; // Track initial changeset from URL
 
         this.init();
     }
@@ -348,6 +349,50 @@ class ChangesetViewer {
             this.changesets = changesets;
             console.log('Loaded changesets:', this.changesets.length);
 
+            // Handle initial changeset permalink
+            if (this.initialChangesetId) {
+                const found = this.changesets.find(cs => cs.id === this.initialChangesetId);
+                if (found) {
+                    // It will be selected after rendering
+                    // We defer selection until after applyFilters calls renderChangesets
+                    setTimeout(() => this.selectChangeset(found), 100);
+                } else {
+                    // Fetch individually
+                    try {
+                        console.log('Fetching missing initial changeset:', this.initialChangesetId);
+                        const res = await fetch(`/api/changesets/${this.initialChangesetId}`);
+                        if (res.ok) {
+                            const feature = await res.json();
+                            const cs = feature.properties;
+                            // Add bbox coordinates if they exist
+                            if (feature.geometry && feature.geometry.type === 'Polygon') {
+                                const coords = feature.geometry.coordinates[0];
+                                const lons = coords.map(c => c[0]);
+                                const lats = coords.map(c => c[1]);
+                                cs.min_lon = Math.min(...lons);
+                                cs.max_lon = Math.max(...lons);
+                                cs.min_lat = Math.min(...lats);
+                                cs.max_lat = Math.max(...lats);
+                            }
+                            // Map 'user' and 'uid' to 'user_name' and 'user_id' for consistency
+                            if (cs.user && !cs.user_name) {
+                                cs.user_name = cs.user;
+                            }
+                            if (cs.uid && !cs.user_id) {
+                                cs.user_id = cs.uid;
+                            }
+
+                            // Add to list at the top
+                            this.changesets.unshift(cs);
+                            setTimeout(() => this.selectChangeset(cs), 100);
+                        }
+                    } catch (e) {
+                        console.error('Failed to fetch initial changeset', e);
+                    }
+                }
+                this.initialChangesetId = null; // Clear it
+            }
+
             this.applyFilters();
 
             // Update filter summary after loading changesets
@@ -361,6 +406,13 @@ class ChangesetViewer {
     }
 
     loadFiltersFromUrl() {
+        // Check for permalink in path
+        const pathMatch = window.location.pathname.match(/\/changeset\/(\d+)/);
+        if (pathMatch) {
+            this.initialChangesetId = parseInt(pathMatch[1]);
+            console.log('Initial changeset ID from URL:', this.initialChangesetId);
+        }
+
         const params = new URLSearchParams(window.location.search);
 
         if (params.has('user_name')) {
@@ -761,6 +813,11 @@ class ChangesetViewer {
     }
 
     async selectChangeset(changeset) {
+        // Update URL to permalink
+        const params = new URLSearchParams(window.location.search);
+        const newUrl = `/changeset/${changeset.id}?${params.toString()}`;
+        window.history.pushState({}, '', newUrl);
+
         // Mark as read when selected
         this.markAsRead(changeset);
 
@@ -1416,6 +1473,11 @@ class ChangesetViewer {
 
     closePanel() {
         document.getElementById('changesetDetailPanel').classList.remove('active');
+
+        // Revert URL to base
+        const params = new URLSearchParams(window.location.search);
+        const newUrl = `/?${params.toString()}`;
+        window.history.pushState({}, '', newUrl);
 
         // Clear adiff visualization first, while selectedChangeset is still valid
         this.clearAdiff();

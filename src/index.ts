@@ -20,6 +20,19 @@ const app = new Hono<{ Bindings: Env }>();
 // Mount API routes first (so they take precedence)
 app.route('/api', api);
 
+// Serve index.html for changeset permalinks
+app.get('/changeset/:id', async (c) => {
+  // @ts-ignore - ASSETS binding
+  if (c.env.ASSETS) {
+    // Create a new request for index.html
+    const url = new URL(c.req.url);
+    url.pathname = '/';
+    // @ts-ignore
+    return c.env.ASSETS.fetch(new Request(url.toString(), c.req.raw));
+  }
+  return c.notFound();
+});
+
 // Serve static assets - fallback to ASSETS binding if available
 app.get('*', async (c) => {
   // @ts-ignore - ASSETS binding
