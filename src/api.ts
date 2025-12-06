@@ -354,12 +354,9 @@ function generateRss(changesets: any[]): string {
     let description = `<p><strong>User:</strong> ${cs.user_name}</p>`;
     description += `<p><strong>Comment:</strong> ${comment}</p>`;
     description += `<p><strong>Changes:</strong> ${cs.num_changes}</p>`;
-    if (cs.tags && Object.keys(cs.tags).length > 0) {
-      description += `<p><strong>Tags:</strong></p><ul>`;
-      for (const [k, v] of Object.entries(cs.tags)) {
-        description += `<li>${k}: ${v}</li>`;
-      }
-      description += `</ul>`;
+
+    if (cs.tags && cs.tags.created_by) {
+      description += `<p><strong>Editor:</strong> ${cs.tags.created_by}</p>`;
     }
 
     return `    <item>
