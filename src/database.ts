@@ -209,6 +209,16 @@ export async function queryChangesets(
     }
   }
 
+  if (filters.beforeId) {
+    query += ' AND id < ?';
+    params.push(filters.beforeId);
+  }
+
+  if (filters.afterId) {
+    query += ' AND id > ?';
+    params.push(filters.afterId);
+  }
+
   // Filter by tags using SQLite JSON functions
   if (filters.tags && Array.isArray(filters.tags) && filters.tags.length > 0) {
     for (const tagFilter of filters.tags) {

@@ -80,11 +80,16 @@ function getFiltersFromContext(c: any) {
   const tagsParams = c.req.queries('tags');
   const limitStr = c.req.query('limit');
   const offsetStr = c.req.query('offset');
+  const beforeIdStr = c.req.query('before_id');
+  const afterIdStr = c.req.query('after_id');
 
   const filters: any = {
-    limit: limitStr ? parseInt(limitStr) : 100,
+    limit: limitStr ? parseInt(limitStr) : 25,
     offset: offsetStr ? parseInt(offsetStr) : 0
   };
+
+  if (beforeIdStr) filters.beforeId = parseInt(beforeIdStr);
+  if (afterIdStr) filters.afterId = parseInt(afterIdStr);
 
   if (userId) filters.userId = parseInt(userId);
   if (userName) filters.userName = userName;

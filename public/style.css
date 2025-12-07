@@ -769,3 +769,24 @@ input::placeholder {
 .close-help-btn:hover {
     background: var(--primary-hover);
 }
+
+/* Pagination Buttons */
+.load-new-container,
+.load-more-container {
+    padding: 0.5rem;
+    text-align: center;
+    background: #f1f5f9;
+    border-bottom: 1px solid #cbd5e1;
+}
+
+.load-more-container {
+    border-top: 1px solid #cbd5e1;
+    border-bottom: none;
+}
+
+.btn-sm {
+    padding: 0.25rem 0.5rem;
+    font-size: 0.75rem;
+    width: auto;
+    display: inline-block;
+}

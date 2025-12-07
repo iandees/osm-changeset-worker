@@ -138,11 +138,13 @@ class ChangesetViewer {
             }
         });
 
-        // Also trigger on limit change
-        document.getElementById('limit').addEventListener('keypress', (e) => {
-            if (e.key === 'Enter') {
-                this.loadChangesets();
-            }
+        // Pagination buttons
+        document.getElementById('loadMoreBtn').addEventListener('click', () => {
+            this.loadChangesets('older');
+        });
+
+        document.getElementById('loadNewBtn').addEventListener('click', () => {
+            this.loadChangesets('newer');
         });
     }
 
@@ -245,8 +247,8 @@ class ChangesetViewer {
         });
     }
 
-    async loadChangesets(replaceUrl = false) {
-        const limit = document.getElementById('limit').value;
+    async loadChangesets(mode = 'initial') {
+        // mode: 'initial', 'newer', 'older'
         const username = document.getElementById('username').value.trim();
         const tagsInput = document.getElementById('tags').value.trim();
         const bboxSizeMin = document.getElementById('bboxSizeMin').value.trim();
@@ -254,11 +256,26 @@ class ChangesetViewer {
 
         try {
             const changesetItems = document.getElementById('changesetItems');
-            changesetItems.innerHTML = '<div class="loading">Loading changesets...</div>';
+            const loadMoreBtn = document.getElementById('loadMoreBtn');
+            const loadNewBtn = document.getElementById('loadNewBtn');
+            const loadMoreContainer = document.getElementById('loadMoreContainer');
+            const loadNewContainer = document.getElementById('loadNewContainer');
+
+            if (mode === 'initial') {
+                changesetItems.innerHTML = '<div class="loading">Loading changesets...</div>';
+                loadMoreContainer.style.display = 'none';
+                loadNewContainer.style.display = 'none';
+                this.changesets = [];
+            } else if (mode === 'older') {
+                loadMoreBtn.textContent = 'Loading...';
+                loadMoreBtn.disabled = true;
+            } else if (mode === 'newer') {
+                loadNewBtn.textContent = 'Loading...';
+                loadNewBtn.disabled = true;
+            }
 
             // Build query parameters
             const params = new URLSearchParams();
-            params.set('limit', limit);
 
             if (username) {
                 params.set('user_name', username);
@@ -279,7 +296,7 @@ class ChangesetViewer {
                 params.set('bbox_size_max', bboxSizeMax);
             }
 
-            // Parse tags input - format: key=value or key="value with spaces"
+            // Parse tags input
             if (tagsInput) {
                 const tagPairs = this.parseTagsInput(tagsInput);
                 tagPairs.forEach(pair => {
@@ -287,24 +304,36 @@ class ChangesetViewer {
                 });
             }
 
-            // Update RSS Link
-            const rssParams = new URLSearchParams(params);
-            const rssLink = document.getElementById('rssLink');
-            if (rssLink) {
-                const protocol = window.location.protocol;
-                const host = window.location.host;
-                rssLink.href = `${protocol}//${host}/api/changesets.rss?${rssParams.toString()}`;
+            // Add pagination params
+            if (mode === 'older' && this.changesets.length > 0) {
+                const oldestId = this.changesets[this.changesets.length - 1].id;
+                params.set('before_id', oldestId);
+            } else if (mode === 'newer' && this.changesets.length > 0) {
+                const newestId = this.changesets[0].id;
+                params.set('after_id', newestId);
             }
 
-            // Update Browser URL
-            const queryString = params.toString();
-            const newUrl = `${window.location.pathname}?${queryString}`;
-            if (replaceUrl) {
+            // Update RSS Link (only for base filters)
+            if (mode === 'initial') {
+                const rssParams = new URLSearchParams(params);
+                const rssLink = document.getElementById('rssLink');
+                if (rssLink) {
+                    const protocol = window.location.protocol;
+                    const host = window.location.host;
+                    rssLink.href = `${protocol}//${host}/api/changesets.rss?${rssParams.toString()}`;
+                }
+
+                // Update Browser URL
+                const queryString = params.toString();
+                const newUrl = `${window.location.pathname}?${queryString}`;
+                // Only replace state if we are just reloading, push if it's a new filter action
+                // But here we don't know easily. Let's assume pushState for now unless it's a reload.
+                // For simplicity, just replaceState to avoid cluttering history with every filter change?
+                // The original code had a replaceUrl param.
                 window.history.replaceState({}, '', newUrl);
-            } else {
-                window.history.pushState({}, '', newUrl);
             }
 
+            const queryString = params.toString();
             const url = `/api/changesets?${queryString}`;
             console.log('Fetching from:', url);
             const response = await fetch(url);
@@ -314,15 +343,12 @@ class ChangesetViewer {
             }
 
             const data = await response.json();
-            console.log('Received data:', data);
 
-            // Check if the API returned GeoJSON FeatureCollection format
-            let changesets = [];
+            // Process new changesets
+            let newChangesets = [];
             if (data.type === 'FeatureCollection' && Array.isArray(data.features)) {
-                // Extract changeset data from GeoJSON features
-                changesets = data.features.map(feature => {
+                newChangesets = data.features.map(feature => {
                     const cs = feature.properties;
-                    // Add bbox coordinates if they exist
                     if (feature.geometry && feature.geometry.type === 'Polygon') {
                         const coords = feature.geometry.coordinates[0];
                         const lons = coords.map(c => c[0]);
@@ -332,39 +358,61 @@ class ChangesetViewer {
                         cs.min_lat = Math.min(...lats);
                         cs.max_lat = Math.max(...lats);
                     }
-                    // Map 'user' and 'uid' to 'user_name' and 'user_id' for consistency
-                    if (cs.user && !cs.user_name) {
-                        cs.user_name = cs.user;
-                    }
-                    if (cs.uid && !cs.user_id) {
-                        cs.user_id = cs.uid;
-                    }
+                    if (cs.user && !cs.user_name) cs.user_name = cs.user;
+                    if (cs.uid && !cs.user_id) cs.user_id = cs.uid;
                     return cs;
                 });
             } else if (Array.isArray(data)) {
-                // Plain array format
-                changesets = data;
+                newChangesets = data;
             }
 
-            this.changesets = changesets;
-            console.log('Loaded changesets:', this.changesets.length);
+            console.log(`Loaded ${newChangesets.length} changesets (mode: ${mode})`);
 
-            // Handle initial changeset permalink
-            if (this.initialChangesetId) {
+            if (mode === 'initial') {
+                this.changesets = newChangesets;
+                // Show load more if we got a full page (assuming default limit 25)
+                loadMoreContainer.style.display = newChangesets.length >= 25 ? 'block' : 'none';
+                // Always show load new container, but maybe hide button if no new ones?
+                // Actually, "Load New" is always valid to check for updates.
+                loadNewContainer.style.display = 'block';
+            } else if (mode === 'older') {
+                if (newChangesets.length > 0) {
+                    this.changesets = [...this.changesets, ...newChangesets];
+                } else {
+                    loadMoreBtn.textContent = 'No more changesets';
+                    setTimeout(() => {
+                        loadMoreBtn.textContent = 'Load More';
+                        loadMoreContainer.style.display = 'none';
+                    }, 2000);
+                }
+                loadMoreBtn.disabled = false;
+                loadMoreBtn.textContent = 'Load More';
+            } else if (mode === 'newer') {
+                if (newChangesets.length > 0) {
+                    // Prepend new changesets
+                    this.changesets = [...newChangesets, ...this.changesets];
+                } else {
+                    loadNewBtn.textContent = 'No new changesets';
+                    setTimeout(() => {
+                        loadNewBtn.textContent = 'Load New Changesets';
+                    }, 2000);
+                }
+                loadNewBtn.disabled = false;
+                loadNewBtn.textContent = 'Load New Changesets';
+            }
+
+            // Handle initial changeset permalink (only on initial load)
+            if (mode === 'initial' && this.initialChangesetId) {
                 const found = this.changesets.find(cs => cs.id === this.initialChangesetId);
                 if (found) {
-                    // It will be selected after rendering
-                    // We defer selection until after applyFilters calls renderChangesets
                     setTimeout(() => this.selectChangeset(found), 100);
                 } else {
                     // Fetch individually
                     try {
-                        console.log('Fetching missing initial changeset:', this.initialChangesetId);
                         const res = await fetch(`/api/changesets/${this.initialChangesetId}`);
                         if (res.ok) {
                             const feature = await res.json();
                             const cs = feature.properties;
-                            // Add bbox coordinates if they exist
                             if (feature.geometry && feature.geometry.type === 'Polygon') {
                                 const coords = feature.geometry.coordinates[0];
                                 const lons = coords.map(c => c[0]);
@@ -374,15 +422,9 @@ class ChangesetViewer {
                                 cs.min_lat = Math.min(...lats);
                                 cs.max_lat = Math.max(...lats);
                             }
-                            // Map 'user' and 'uid' to 'user_name' and 'user_id' for consistency
-                            if (cs.user && !cs.user_name) {
-                                cs.user_name = cs.user;
-                            }
-                            if (cs.uid && !cs.user_id) {
-                                cs.user_id = cs.uid;
-                            }
+                            if (cs.user && !cs.user_name) cs.user_name = cs.user;
+                            if (cs.uid && !cs.user_id) cs.user_id = cs.uid;
 
-                            // Add to list at the top
                             this.changesets.unshift(cs);
                             setTimeout(() => this.selectChangeset(cs), 100);
                         }
@@ -390,18 +432,32 @@ class ChangesetViewer {
                         console.error('Failed to fetch initial changeset', e);
                     }
                 }
-                this.initialChangesetId = null; // Clear it
+                this.initialChangesetId = null;
             }
 
-            this.applyFilters();
-
-            // Update filter summary after loading changesets
+            // Render
+            this.renderChangesets(mode === 'newer'); // Pass true to maintain scroll position if newer
+            this.renderMap();
             this.updateFilterSummary();
+
+            if (mode === 'initial') {
+                // Scroll down to hide the load new button
+                const listContainer = document.querySelector('.changeset-list');
+                if (loadNewContainer && listContainer) {
+                    // Use setTimeout to ensure layout is complete
+                    setTimeout(() => {
+                        listContainer.scrollTop = loadNewContainer.offsetHeight;
+                    }, 0);
+                }
+            }
+
         } catch (error) {
             console.error('Error loading changesets:', error);
-            this.changesets = [];
-            document.getElementById('changesetItems').innerHTML =
-                '<div class="error">Failed to load changesets. Please try again.</div>';
+            if (mode === 'initial') {
+                this.changesets = [];
+                document.getElementById('changesetItems').innerHTML =
+                    '<div class="error">Failed to load changesets. Please try again.</div>';
+            }
         }
     }
 
@@ -451,10 +507,6 @@ class ChangesetViewer {
 
         if (params.has('bbox_size_max')) {
             document.getElementById('bboxSizeMax').value = params.get('bbox_size_max');
-        }
-
-        if (params.has('limit')) {
-            document.getElementById('limit').value = params.get('limit');
         }
     }
 
@@ -513,7 +565,6 @@ class ChangesetViewer {
     clearFilters() {
         document.getElementById('username').value = '';
         document.getElementById('tags').value = '';
-        document.getElementById('limit').value = '100';
         document.getElementById('bboxSizeMin').value = '';
         document.getElementById('bboxSizeMax').value = '';
 
@@ -579,11 +630,22 @@ class ChangesetViewer {
         }
     }
 
-    renderChangesets() {
+    renderChangesets(maintainScroll = false) {
         const changesetItems = document.getElementById('changesetItems');
+        const listContainer = document.querySelector('.changeset-list');
 
-        // Reset focus when list reloads
-        this.focusedIndex = -1;
+        // Capture scroll position and height before update
+        const previousScrollHeight = listContainer.scrollHeight;
+        const previousScrollTop = listContainer.scrollTop;
+
+        // Reset focus when list reloads (only if not maintaining scroll/prepending?)
+        // If we are loading newer items, the indices shift.
+        // If we are loading older items, the indices stay same (0 is still 0).
+        // But if we prepend, index 0 becomes index N.
+        // For simplicity, let's reset focus if we are doing a full reload,
+        // but try to keep it if we are just appending/prepending?
+        // Actually, re-rendering everything invalidates the DOM elements, so we lose focus anyway.
+        // We would need to find the previously selected ID and re-highlight it.
 
         // Update the header with count
         const header = document.getElementById('changesetListHeader');
@@ -610,6 +672,25 @@ class ChangesetViewer {
                 this.selectChangeset(this.changesets[index]);
             });
         });
+
+        // Restore selection visual state
+        if (this.selectedChangeset) {
+            const item = document.querySelector(`.changeset-item[data-id="${this.selectedChangeset.id}"]`);
+            if (item) {
+                item.classList.add('active');
+                // Update focusedIndex to match new position
+                const newIndex = this.changesets.findIndex(cs => cs.id === this.selectedChangeset.id);
+                if (newIndex !== -1) {
+                    this.focusedIndex = newIndex;
+                }
+            }
+        }
+
+        // Restore scroll position if needed
+        if (maintainScroll) {
+             const newScrollHeight = listContainer.scrollHeight;
+             listContainer.scrollTop = previousScrollTop + (newScrollHeight - previousScrollHeight);
+        }
     }
 
     createChangesetItem(changeset) {
@@ -1980,12 +2061,6 @@ class ChangesetViewer {
         const bboxSizeMax = document.getElementById('bboxSizeMax').value.trim();
         if (bboxSizeMax) {
             filters.push(`<span class="filter-tag">📏 Max: ${bboxSizeMax}</span>`);
-        }
-
-        // Check limit (only show if not default)
-        const limit = document.getElementById('limit').value;
-        if (limit !== '100') {
-            filters.push(`<span class="filter-tag">Limit: ${limit}</span>`);
         }
 
         // Update summary display
