@@ -23,7 +23,7 @@ class ChangesetViewer {
         this.initMap();
         this.initEventListeners();
         this.loadFiltersFromUrl();
-        await this.loadChangesets(true);
+        await this.loadChangesets('initial');
         this.updateFilterSummary();
     }
 

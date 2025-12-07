@@ -55,7 +55,8 @@ api.get('/changesets.rss', async (c) => {
   try {
     const filters = getFiltersFromContext(c);
     const changesets = await queryChangesets(c.env.DB, filters);
-    const rss = generateRss(changesets);
+    const url = new URL(c.req.url);
+    const rss = generateRss(changesets, url.search);
 
     return c.text(rss, 200, {
       'Content-Type': 'application/rss+xml'
@@ -349,10 +350,11 @@ function convertAdiffToGeoJSON(xmlData: string) {
   };
 }
 
-function generateRss(changesets: any[]): string {
+function generateRss(changesets: any[], queryString: string = ''): string {
   const items = changesets.map(cs => {
     const title = `Changeset ${cs.id} by ${cs.user_name}`;
-    const link = `https://changesets.mapki.com/changeset/${cs.id}`;
+    const rawLink = `https://changesets.mapki.com/changeset/${cs.id}${queryString}`;
+    const link = rawLink.replace(/&/g, '&amp;');
     const date = new Date(cs.created_at).toUTCString();
     const comment = cs.tags?.comment || '(no comment)';
 
