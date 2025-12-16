@@ -358,13 +358,16 @@ function generateRss(changesets: any[], queryString: string = ''): string {
     const date = new Date(cs.created_at).toUTCString();
     const comment = cs.tags?.comment || '(no comment)';
 
-    let description = `<p><strong>User:</strong> ${cs.user_name}</p>`;
-    description += `<p><strong>Comment:</strong> ${comment}</p>`;
-    description += `<p><strong>Changes:</strong> ${cs.num_changes}</p>`;
+    let description = `<p><strong>User:</strong> ${cs.user_name}</p>\n`;
+    description += `<p><strong>Comment:</strong> ${comment}</p>\n`;
+    description += `<p><strong>Changes:</strong> ${cs.num_changes}</p>\n`;
 
     if (cs.tags && cs.tags.created_by) {
-      description += `<p><strong>Editor:</strong> ${cs.tags.created_by}</p>`;
+      description += `<p><strong>Editor:</strong> ${cs.tags.created_by}</p>\n`;
     }
+
+    // Strip last newline for cleaner output
+    description = description.trimEnd();
 
     return `    <item>
       <title><![CDATA[${title}]]></title>
