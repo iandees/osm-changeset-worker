@@ -11,6 +11,7 @@ class ChangesetViewer {
         this.bboxDrawLayer = null; // Layer for drawing bbox preview
         this.adiffActive = false; // Track if adiff is loaded
         this.adiffData = null; // Store adiff GeoJSON data
+        this.adiffPopup = null; // Currently open adiff popup
         this.focusedIndex = -1; // Track focused changeset in list
         this.readChangesets = new Set(); // Track read changesets
         this.initialChangesetId = null; // Track initial changeset from URL
@@ -1260,6 +1261,16 @@ class ChangesetViewer {
 
         this.adiffActive = false;
 
+        // Close any open adiff popup
+        try {
+            if (this.adiffPopup) {
+                this.adiffPopup.remove();
+                this.adiffPopup = null;
+            }
+        } catch (e) {
+            console.warn('Failed to remove adiff popup', e);
+        }
+
         // Show other changesets
         if (this.map.getLayer('changesets-fill')) {
             this.map.setLayoutProperty('changesets-fill', 'visibility', 'visible');
@@ -1368,7 +1379,13 @@ class ChangesetViewer {
             </div>
         `;
 
-        new maplibregl.Popup()
+        // Remove existing popup if present
+        if (this.adiffPopup) {
+            try { this.adiffPopup.remove(); } catch (e) { /* ignore */ }
+            this.adiffPopup = null;
+        }
+
+        this.adiffPopup = new maplibregl.Popup()
             .setLngLat(e.lngLat)
             .setHTML(content)
             .addTo(this.map);
