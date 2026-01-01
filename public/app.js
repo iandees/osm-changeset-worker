@@ -1315,6 +1315,7 @@ class ChangesetViewer {
         }
 
         let tagsHtml = '';
+        let metadataHtml = '';
 
         // If modify, try to find the other version to diff
         if (props.changeType === 'modify' && this.adiffData) {
@@ -1339,11 +1340,18 @@ class ChangesetViewer {
                 const newTags = currentVersion === 'new' ? tags : otherTags;
 
                 tagsHtml = this.generateTagDiffHtml(oldTags, newTags);
+
+                // Generate metadata diff
+                const oldProps = currentVersion === 'new' ? otherFeature.properties : props;
+                const newProps = currentVersion === 'new' ? props : otherFeature.properties;
+                metadataHtml = this.generateMetadataDiff(oldProps, newProps);
             } else {
                 tagsHtml = this.generateTagsTable(tags);
+                metadataHtml = this.generateMetadata(props);
             }
         } else {
             tagsHtml = this.generateTagsTable(tags);
+            metadataHtml = this.generateMetadata(props);
         }
 
         const changeClass = this.getChangeClass(props.changeType, props.version);
@@ -1355,6 +1363,7 @@ class ChangesetViewer {
                     <span class="change-type ${changeClass}">${props.changeType}</span>
                     ${props.version ? `<span class="version-text">(${props.version})</span>` : ''}
                 </div>
+                ${metadataHtml}
                 ${tagsHtml ? `<div class="popup-tags">${tagsHtml}</div>` : ''}
             </div>
         `;
@@ -1417,6 +1426,69 @@ class ChangesetViewer {
         if (type === 'delete') return '#ef4444';
         if (type === 'modify') return version === 'new' ? '#3b82f6' : '#f59e0b';
         return '#333';
+    }
+
+    generateMetadata(props) {
+        let html = '<div class="popup-metadata">';
+
+        if (props.user) {
+            const userLink = props.uid ?
+                `<a href="https://www.openstreetmap.org/user/${encodeURIComponent(props.user)}" target="_blank" rel="noopener noreferrer">${this.escapeHtml(props.user)}</a>` :
+                this.escapeHtml(props.user);
+            html += `<div><strong>User:</strong> ${userLink}</div>`;
+        }
+
+        if (props.timestamp) {
+            const date = new Date(props.timestamp);
+            html += `<div><strong>Time:</strong> ${date.toLocaleString()}</div>`;
+        }
+
+        if (props.changeset) {
+            html += `<div><strong>Changeset:</strong> <a href="https://www.openstreetmap.org/changeset/${props.changeset}" target="_blank" rel="noopener noreferrer">${props.changeset}</a></div>`;
+        }
+
+        html += '</div>';
+        return html;
+    }
+
+    generateMetadataDiff(oldProps, newProps) {
+        let html = '<div class="popup-metadata">';
+
+        // User comparison
+        if (oldProps.user !== newProps.user) {
+            const oldUserLink = oldProps.uid ?
+                `<a href="https://www.openstreetmap.org/user/${encodeURIComponent(oldProps.user)}" target="_blank" rel="noopener noreferrer">${this.escapeHtml(oldProps.user)}</a>` :
+                this.escapeHtml(oldProps.user);
+            const newUserLink = newProps.uid ?
+                `<a href="https://www.openstreetmap.org/user/${encodeURIComponent(newProps.user)}" target="_blank" rel="noopener noreferrer">${this.escapeHtml(newProps.user)}</a>` :
+                this.escapeHtml(newProps.user);
+            html += `<div><strong>User:</strong> <span class="diff-old-val">${oldUserLink}</span> → <span class="diff-new-val">${newUserLink}</span></div>`;
+        } else if (newProps.user) {
+            const userLink = newProps.uid ?
+                `<a href="https://www.openstreetmap.org/user/${encodeURIComponent(newProps.user)}" target="_blank" rel="noopener noreferrer">${this.escapeHtml(newProps.user)}</a>` :
+                this.escapeHtml(newProps.user);
+            html += `<div><strong>User:</strong> ${userLink}</div>`;
+        }
+
+        // Timestamp comparison
+        if (oldProps.timestamp !== newProps.timestamp) {
+            const oldDate = new Date(oldProps.timestamp);
+            const newDate = new Date(newProps.timestamp);
+            html += `<div><strong>Time:</strong> <span class="diff-old-val">${oldDate.toLocaleString()}</span> → <span class="diff-new-val">${newDate.toLocaleString()}</span></div>`;
+        } else if (newProps.timestamp) {
+            const date = new Date(newProps.timestamp);
+            html += `<div><strong>Time:</strong> ${date.toLocaleString()}</div>`;
+        }
+
+        // Changeset comparison
+        if (oldProps.changeset !== newProps.changeset) {
+            html += `<div><strong>Changeset:</strong> <span class="diff-old-val"><a href="https://www.openstreetmap.org/changeset/${oldProps.changeset}" target="_blank" rel="noopener noreferrer">${oldProps.changeset}</a></span> → <span class="diff-new-val"><a href="https://www.openstreetmap.org/changeset/${newProps.changeset}" target="_blank" rel="noopener noreferrer">${newProps.changeset}</a></span></div>`;
+        } else if (newProps.changeset) {
+            html += `<div><strong>Changeset:</strong> <a href="https://www.openstreetmap.org/changeset/${newProps.changeset}" target="_blank" rel="noopener noreferrer">${newProps.changeset}</a></div>`;
+        }
+
+        html += '</div>';
+        return html;
     }
 
     showChangesetDetails(changeset) {

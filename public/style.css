@@ -222,6 +222,27 @@
     margin-bottom: 8px;
 }
 
+.popup-metadata {
+    margin: 8px 0;
+    padding: 8px;
+    background-color: #f8fafc;
+    border-radius: 4px;
+    font-size: 0.85rem;
+}
+
+.popup-metadata div {
+    margin: 4px 0;
+}
+
+.popup-metadata a {
+    color: #2563eb;
+    text-decoration: none;
+}
+
+.popup-metadata a:hover {
+    text-decoration: underline;
+}
+
 .change-type {
     font-weight: bold;
     text-transform: capitalize;

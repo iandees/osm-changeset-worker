@@ -423,7 +423,12 @@ function nodeToFeature(node: any) {
     properties: {
       type: "node",
       id: node.id,
-      tags: parseTags(node.tag)
+      tags: parseTags(node.tag),
+      version: node.version,
+      timestamp: node.timestamp,
+      user: node.user,
+      uid: node.uid,
+      changeset: node.changeset
     }
   };
 }
@@ -446,7 +451,12 @@ function wayToFeature(way: any) {
     properties: {
       type: "way",
       id: way.id,
-      tags: parseTags(way.tag)
+      tags: parseTags(way.tag),
+      version: way.version,
+      timestamp: way.timestamp,
+      user: way.user,
+      uid: way.uid,
+      changeset: way.changeset
     }
   };
 }
