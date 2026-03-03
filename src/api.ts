@@ -10,6 +10,7 @@ import {
   getUserIdsByName
 } from './database';
 import { validateBbox } from './utils';
+import { getCoveringGeohashes } from './geohash';
 
 const api = new Hono<{ Bindings: Env }>();
 
@@ -470,5 +471,50 @@ function parseTags(tags: any) {
   });
   return result;
 }
+
+/**
+ * POST /api/backfill-geohashes - Rebuild the geohash index for all changesets.
+ * Processes changesets in batches, starting from ?after_id=0.
+ * Returns the last processed ID so you can call again with ?after_id=<last_id>.
+ * Returns { done: true } when complete.
+ */
+api.post('/backfill-geohashes', async (c) => {
+  const afterId = parseInt(c.req.query('after_id') || '0');
+  const BATCH_SIZE = 5000;
+
+  try {
+    const { results } = await c.env.DB.prepare(
+      'SELECT id, min_lat, max_lat, min_lon, max_lon FROM changesets WHERE id > ? AND min_lat IS NOT NULL ORDER BY id LIMIT ?'
+    ).bind(afterId, BATCH_SIZE).all<{
+      id: number; min_lat: number; max_lat: number; min_lon: number; max_lon: number;
+    }>();
+
+    if (!results || results.length === 0) {
+      return c.json({ done: true, processed: 0 });
+    }
+
+    const stmt = c.env.DB.prepare(
+      'INSERT OR IGNORE INTO changeset_geohashes (changeset_id, geohash) VALUES (?, ?)'
+    );
+
+    const batch: any[] = [];
+    for (const cs of results) {
+      const geohashes = getCoveringGeohashes(cs.min_lon, cs.min_lat, cs.max_lon, cs.max_lat);
+      for (const hash of geohashes) {
+        batch.push(stmt.bind(cs.id, hash));
+      }
+    }
+
+    if (batch.length > 0) {
+      await c.env.DB.batch(batch);
+    }
+
+    const lastId = results[results.length - 1].id;
+    return c.json({ done: false, processed: results.length, last_id: lastId });
+  } catch (error) {
+    console.error('Error backfilling geohashes:', error);
+    return c.json({ error: 'Failed to backfill geohashes' }, 500);
+  }
+});
 
 export default api;

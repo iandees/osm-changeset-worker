@@ -86,6 +86,9 @@ function getGeohashesAtPrecision(minLon: number, minLat: number, maxLon: number,
   return Array.from(geohashes);
 }
 
+const MIN_PRECISION = 2;
+const MAX_PRECISION = 5;
+
 function getOptimalPrecision(minLon: number, minLat: number, maxLon: number, maxLat: number): number {
   const latSpan = maxLat - minLat;
   const lonSpan = maxLon - minLon;
@@ -97,30 +100,27 @@ function getOptimalPrecision(minLon: number, minLat: number, maxLon: number, max
   return 5;
 }
 
-// Used for INDEXING: Get covering hashes at the optimal precision and lower precisions
+// Used for INDEXING: Get covering hashes at the optimal precision ONLY.
+// Each changeset is indexed at a single precision level matching its size.
+// This prevents small changesets from polluting coarse precision levels,
+// which would cause queries at those levels to return too many false positives.
 export function getCoveringGeohashes(minLon: number, minLat: number, maxLon: number, maxLat: number): string[] {
   const optimalPrecision = getOptimalPrecision(minLon, minLat, maxLon, maxLat);
-  const geohashes = new Set<string>();
-  for (let p = 2; p <= optimalPrecision; p++) {
-    const layerHashes = getGeohashesAtPrecision(minLon, minLat, maxLon, maxLat, p);
-    layerHashes.forEach(h => geohashes.add(h));
-  }
-  return Array.from(geohashes);
+  return getGeohashesAtPrecision(minLon, minLat, maxLon, maxLat, optimalPrecision);
 }
 
-// Used for QUERYING: Get covering hashes at ALL precisions
-// Returns null if too many hashes (implies query area is too large for index)
+// Used for QUERYING: Get covering hashes at ALL precision levels.
+// Since each changeset is indexed only at its optimal precision,
+// we must search at every level to find changesets of all sizes.
+// Returns null if too many hashes (implies query area is too large for index).
 export function getSearchGeohashes(minLon: number, minLat: number, maxLon: number, maxLat: number): string[] | null {
   const hashes = new Set<string>();
-  const MAX_HASHES = 2000; // Limit to prevent massive queries
+  const MAX_SEARCH_HASHES = 2000; // Limit to prevent massive queries
 
-  const maxPrecision = getOptimalPrecision(minLon, minLat, maxLon, maxLat);
-
-  // Check precisions up to the optimal precision for the query box
-  for (let p = 2; p <= maxPrecision; p++) {
+  for (let p = MIN_PRECISION; p <= MAX_PRECISION; p++) {
     const layerHashes = getGeohashesAtPrecision(minLon, minLat, maxLon, maxLat, p);
 
-    if (hashes.size + layerHashes.length > MAX_HASHES) {
+    if (hashes.size + layerHashes.length > MAX_SEARCH_HASHES) {
       return null; // Too many hashes, fallback to non-indexed query
     }
 
