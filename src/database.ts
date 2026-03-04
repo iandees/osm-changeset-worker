@@ -2,6 +2,10 @@
 import type { Changeset, ReplicationState } from './types';
 import { getCoveringGeohashes, getSearchGeohashes } from './geohash';
 
+const INDEXED_TAG_KEYS = new Set([
+  'comment', 'hashtags', 'created_by', 'source', 'locale', 'imagery_used', 'host'
+]);
+
 /**
  * Get the current replication state from database
  */
@@ -57,6 +61,22 @@ export async function storeChangeset(db: D1Database, changeset: Changeset): Prom
     tagsJson
   ).run();
 
+  // Insert indexed tags
+  if (changeset.tags) {
+    const tagStmt = db.prepare(
+      'INSERT OR REPLACE INTO changeset_tags (changeset_id, key, value) VALUES (?, ?, ?)'
+    );
+    const tagBatch: any[] = [];
+    for (const [key, value] of Object.entries(changeset.tags)) {
+      if (INDEXED_TAG_KEYS.has(key)) {
+        tagBatch.push(tagStmt.bind(changeset.id, key, value));
+      }
+    }
+    if (tagBatch.length > 0) {
+      await db.batch(tagBatch);
+    }
+  }
+
   if (changeset.user_id && changeset.user_name) {
     await updateUserName(db, changeset.user_id, changeset.user_name, changeset.created_at);
   }
@@ -104,6 +124,23 @@ export async function storeChangesets(db: D1Database, changesets: any[]) {
     }
   });
 
+  // Insert indexed tags
+  const tagStmt = db.prepare(
+    'INSERT OR REPLACE INTO changeset_tags (changeset_id, key, value) VALUES (?, ?, ?)'
+  );
+
+  const tagBatch: any[] = [];
+  changesets.forEach(cs => {
+    if (cs.tags) {
+      const tags = typeof cs.tags === 'string' ? JSON.parse(cs.tags) : cs.tags;
+      for (const [key, value] of Object.entries(tags)) {
+        if (INDEXED_TAG_KEYS.has(key)) {
+          tagBatch.push(tagStmt.bind(cs.id, key, value));
+        }
+      }
+    }
+  });
+
   // Update user_names table
   const userStmt = db.prepare(`
     INSERT INTO user_names (user_id, user_name, first_seen, last_seen)
@@ -133,7 +170,7 @@ export async function storeChangesets(db: D1Database, changesets: any[]) {
     userStmt.bind(u.userId, u.userName, u.timestamp, u.timestamp)
   );
 
-  await db.batch([...batch, ...geohashBatch, ...userBatch]);
+  await db.batch([...batch, ...geohashBatch, ...tagBatch, ...userBatch]);
 }
 
 /**
@@ -220,26 +257,29 @@ export async function queryChangesets(
     params.push(filters.afterId);
   }
 
-  // Filter by tags using SQLite JSON functions
+  // Filter by tags - use index table for indexed keys, json_extract for others
   if (filters.tags && Array.isArray(filters.tags) && filters.tags.length > 0) {
     for (const tagFilter of filters.tags) {
       const { key, operator, value } = tagFilter;
 
-      if (operator === '=') {
+      if (operator === '=' && INDEXED_TAG_KEYS.has(key)) {
+        query += ` AND id IN (SELECT changeset_id FROM changeset_tags WHERE key = ? AND value = ?)`;
+        params.push(key, value);
+      } else if (operator === '~' && INDEXED_TAG_KEYS.has(key)) {
+        query += ` AND id IN (SELECT changeset_id FROM changeset_tags WHERE key = ? AND value LIKE ?)`;
+        params.push(key, `%${value}%`);
+      } else if (operator === '=') {
         query += ` AND json_extract(tags, '$."' || ? || '"') = ?`;
         params.push(key, value);
       } else if (operator === '!=') {
-        // != matches if key exists and value is different, OR if key does not exist (is null)
         query += ` AND (json_extract(tags, '$."' || ? || '"') IS NOT ? OR json_extract(tags, '$."' || ? || '"') IS NULL)`;
         params.push(key, value, key);
       } else if (operator === '~') {
-        // LIKE match (contains)
         query += ` AND json_extract(tags, '$."' || ? || '"') LIKE ?`;
         params.push(key, `%${value}%`);
       }
     }
   } else if (filters.tags && !Array.isArray(filters.tags) && Object.keys(filters.tags).length > 0) {
-    // Fallback for legacy object format if any
     for (const [key, value] of Object.entries(filters.tags)) {
       query += ` AND json_extract(tags, '$."' || ? || '"') = ?`;
       params.push(key, value);

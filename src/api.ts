@@ -517,4 +517,56 @@ api.post('/backfill-geohashes', async (c) => {
   }
 });
 
+/**
+ * POST /api/backfill-tags - Rebuild the changeset_tags index for all changesets.
+ * Processes changesets in batches, starting from ?after_id=0.
+ * Returns the last processed ID so you can call again with ?after_id=<last_id>.
+ * Returns { done: true } when complete.
+ */
+api.post('/backfill-tags', async (c) => {
+  const afterId = parseInt(c.req.query('after_id') || '0');
+  const BATCH_SIZE = 5000;
+  const INDEXED_TAG_KEYS = new Set([
+    'comment', 'hashtags', 'created_by', 'source', 'locale', 'imagery_used', 'host'
+  ]);
+
+  try {
+    const { results } = await c.env.DB.prepare(
+      'SELECT id, tags FROM changesets WHERE id > ? AND tags IS NOT NULL ORDER BY id LIMIT ?'
+    ).bind(afterId, BATCH_SIZE).all<{ id: number; tags: string }>();
+
+    if (!results || results.length === 0) {
+      return c.json({ done: true, processed: 0 });
+    }
+
+    const stmt = c.env.DB.prepare(
+      'INSERT OR REPLACE INTO changeset_tags (changeset_id, key, value) VALUES (?, ?, ?)'
+    );
+
+    const batch: any[] = [];
+    for (const cs of results) {
+      try {
+        const tags = JSON.parse(cs.tags);
+        for (const [key, value] of Object.entries(tags)) {
+          if (INDEXED_TAG_KEYS.has(key)) {
+            batch.push(stmt.bind(cs.id, key, value as string));
+          }
+        }
+      } catch {
+        // Skip rows with invalid JSON
+      }
+    }
+
+    if (batch.length > 0) {
+      await c.env.DB.batch(batch);
+    }
+
+    const lastId = results[results.length - 1].id;
+    return c.json({ done: false, processed: results.length, last_id: lastId });
+  } catch (error) {
+    console.error('Error backfilling tags:', error);
+    return c.json({ error: 'Failed to backfill tags' }, 500);
+  }
+});
+
 export default api;
