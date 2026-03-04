@@ -221,6 +221,8 @@ class ChangesetViewer {
     moveFocus(delta) {
         if (this.changesets.length === 0) return;
 
+        const prevIndex = this.focusedIndex;
+
         // Initialize focus if none
         if (this.focusedIndex === -1) {
             this.focusedIndex = delta > 0 ? 0 : this.changesets.length - 1;
@@ -231,6 +233,8 @@ class ChangesetViewer {
         // Clamp index
         if (this.focusedIndex < 0) this.focusedIndex = 0;
         if (this.focusedIndex >= this.changesets.length) this.focusedIndex = this.changesets.length - 1;
+
+        if (this.focusedIndex === prevIndex) return;
 
         this.updateFocusVisuals();
         this.selectChangeset(this.changesets[this.focusedIndex]);
