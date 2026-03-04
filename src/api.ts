@@ -262,6 +262,11 @@ api.get('/changesets/:id/adiff', async (c) => {
     const xmlData = await response.text();
     const geojson = convertAdiffToGeoJSON(xmlData);
 
+    const changeset = await getChangesetById(c.env.DB, id);
+    if (changeset && changeset.closed_at) {
+      c.header('Cache-Control', 'public, max-age=86400');
+    }
+
     return c.json(geojson);
   } catch (error) {
     console.error('Error fetching adiff:', error);
