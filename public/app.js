@@ -306,7 +306,11 @@ class ChangesetViewer {
             }
 
             // Add pagination params
-            if (mode === 'older' && this.changesets.length > 0) {
+            if (mode === 'initial' && this.initialChangesetId) {
+                // Anchor the list around the selected changeset so the
+                // surrounding entries are chronologically adjacent.
+                params.set('before_id', this.initialChangesetId + 1);
+            } else if (mode === 'older' && this.changesets.length > 0) {
                 const oldestId = this.changesets[this.changesets.length - 1].id;
                 params.set('before_id', oldestId);
             } else if (mode === 'newer' && this.changesets.length > 0) {
@@ -408,7 +412,8 @@ class ChangesetViewer {
                 if (found) {
                     setTimeout(() => this.selectChangeset(found), 100);
                 } else {
-                    // Fetch individually
+                    // Changeset didn't match the current filters — fetch it
+                    // individually and prepend so the user can still see it.
                     try {
                         const res = await fetch(`/api/changesets/${this.initialChangesetId}`);
                         if (res.ok) {
