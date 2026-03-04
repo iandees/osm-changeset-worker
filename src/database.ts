@@ -263,10 +263,10 @@ export async function queryChangesets(
       const { key, operator, value } = tagFilter;
 
       if (operator === '=' && INDEXED_TAG_KEYS.has(key)) {
-        query += ` AND id IN (SELECT changeset_id FROM changeset_tags WHERE key = ? AND value = ?)`;
+        query += ` AND EXISTS (SELECT 1 FROM changeset_tags WHERE changeset_id = changesets.id AND key = ? AND value = ?)`;
         params.push(key, value);
       } else if (operator === '~' && INDEXED_TAG_KEYS.has(key)) {
-        query += ` AND id IN (SELECT changeset_id FROM changeset_tags WHERE key = ? AND value LIKE ?)`;
+        query += ` AND EXISTS (SELECT 1 FROM changeset_tags WHERE changeset_id = changesets.id AND key = ? AND value LIKE ?)`;
         params.push(key, `%${value}%`);
       } else if (operator === '=') {
         query += ` AND json_extract(tags, '$."' || ? || '"') = ?`;
