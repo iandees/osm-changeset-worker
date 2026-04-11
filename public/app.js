@@ -15,6 +15,9 @@ class ChangesetViewer {
         this.focusedIndex = -1; // Track focused changeset in list
         this.readChangesets = new Set(); // Track read changesets
         this.initialChangesetId = null; // Track initial changeset from URL
+        this.bottomSheetState = 'closed'; // 'closed', 'peek', 'half', 'full'
+        this.bottomSheetView = 'changeset'; // 'changeset' or 'object'
+        this.bottomSheetObjectData = null; // stores current object detail data
 
         this.init();
     }
@@ -24,6 +27,7 @@ class ChangesetViewer {
         this.initMap();
         this.initEventListeners();
         this.setupMobileSidebar();
+        this.setupBottomSheet();
         this.loadFiltersFromUrl();
         await this.loadChangesets('initial');
         this.updateFilterSummary();
@@ -1659,11 +1663,23 @@ class ChangesetViewer {
             });
         }
 
-        document.getElementById('changesetDetailPanel').classList.add('active');
+        this.bottomSheetView = 'changeset';
+        this.bottomSheetObjectData = null;
+
+        if (this.isMobile()) {
+            this.updatePeekText();
+            this.setBottomSheetState('half');
+        } else {
+            document.getElementById('changesetDetailPanel').classList.add('active');
+        }
     }
 
     closePanel() {
-        document.getElementById('changesetDetailPanel').classList.remove('active');
+        if (this.isMobile()) {
+            this.setBottomSheetState('closed');
+        } else {
+            document.getElementById('changesetDetailPanel').classList.remove('active');
+        }
 
         // Revert URL to base
         const params = new URLSearchParams(window.location.search);
@@ -2158,6 +2174,64 @@ class ChangesetViewer {
         if (window.innerWidth >= 768) return;
         document.querySelector('.sidebar').classList.remove('open');
         document.querySelector('.sidebar-backdrop').classList.remove('active');
+    }
+
+    isMobile() {
+        return window.innerWidth <= 767;
+    }
+
+    setBottomSheetState(state) {
+        const panel = document.getElementById('changesetDetailPanel');
+        this.bottomSheetState = state;
+
+        // Remove all state classes
+        panel.classList.remove('sheet-peek', 'sheet-half', 'sheet-full');
+
+        if (state === 'closed') {
+            panel.classList.remove('active');
+            return;
+        }
+
+        panel.classList.add('active');
+        panel.classList.add(`sheet-${state}`);
+    }
+
+    updatePeekText() {
+        const peekText = document.getElementById('bottomSheetPeekText');
+        if (!peekText) return;
+
+        if (this.bottomSheetView === 'object' && this.bottomSheetObjectData) {
+            const props = this.bottomSheetObjectData;
+            const changeLabel = props.changeType.charAt(0).toUpperCase() + props.changeType.slice(1);
+            peekText.innerHTML = `<button class="bottom-sheet-back-btn" id="bottomSheetBack"><i class="ph ph-arrow-left"></i></button> ${props.type}/${props.id} &mdash; ${changeLabel}`;
+
+            const backBtn = document.getElementById('bottomSheetBack');
+            if (backBtn) {
+                backBtn.addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    this.bottomSheetBack();
+                });
+            }
+        } else if (this.selectedChangeset) {
+            const cs = this.selectedChangeset;
+            peekText.textContent = `Changeset #${cs.id} — ${cs.user_name || 'Unknown'}`;
+        }
+    }
+
+    bottomSheetBack() {
+        if (this.bottomSheetView !== 'object') return;
+
+        this.bottomSheetView = 'changeset';
+        this.bottomSheetObjectData = null;
+
+        // Re-render changeset detail
+        if (this.selectedChangeset) {
+            this.showChangesetDetails(this.selectedChangeset);
+        }
+    }
+
+    setupBottomSheet() {
+        // Touch drag handling added in next task
     }
 
     // Filter UI Methods
