@@ -812,6 +812,20 @@ input::placeholder {
     display: inline-block;
 }
 
+/* Status/Error Messages */
+.changeset-items .loading,
+.changeset-items .error {
+    padding: 1.5rem 1rem;
+    text-align: center;
+    font-size: var(--font-sm);
+    color: var(--text-secondary);
+    font-style: italic;
+}
+
+.changeset-items .error {
+    color: var(--danger-color);
+}
+
 /* Sidebar toggle button - hidden on desktop */
 .sidebar-toggle-btn {
     display: none;
