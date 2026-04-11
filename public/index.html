@@ -114,10 +114,16 @@
                 </button>
             </div>
 
-            <!-- Changeset Detail Panel -->
+            <!-- Changeset Detail Panel / Bottom Sheet -->
             <div id="changesetDetailPanel" class="changeset-detail-panel">
-                <button id="closePanel" class="panel-close-btn"><i class="ph ph-x"></i></button>
-                <div id="panelContent"></div>
+                <div class="bottom-sheet-handle" id="bottomSheetHandle">
+                    <div class="bottom-sheet-handle-bar"></div>
+                </div>
+                <div class="bottom-sheet-peek" id="bottomSheetPeek">
+                    <span class="bottom-sheet-peek-text" id="bottomSheetPeekText"></span>
+                    <button id="closePanel" class="panel-close-btn"><i class="ph ph-x"></i></button>
+                </div>
+                <div id="panelContent" class="bottom-sheet-content"></div>
             </div>
         </main>
     </div>
