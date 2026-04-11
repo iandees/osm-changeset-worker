@@ -1404,6 +1404,11 @@ class ChangesetViewer {
             </div>
         `;
 
+        if (this.isMobile()) {
+            this.showObjectInSheet(feature, e.lngLat);
+            return;
+        }
+
         // Remove existing popup if present
         if (this.adiffPopup) {
             try { this.adiffPopup.remove(); } catch (e) { /* ignore */ }
@@ -2227,6 +2232,81 @@ class ChangesetViewer {
         // Re-render changeset detail
         if (this.selectedChangeset) {
             this.showChangesetDetails(this.selectedChangeset);
+        }
+    }
+
+    showObjectInSheet(feature, lngLat) {
+        const props = feature.properties;
+
+        let tags = {};
+        if (props.tags) {
+            if (typeof props.tags === 'string') {
+                try { tags = JSON.parse(props.tags); } catch(e) {}
+            } else {
+                tags = props.tags;
+            }
+        }
+
+        let tagsHtml = '';
+        let metadataHtml = '';
+
+        if (props.changeType === 'modify' && this.adiffData) {
+            const currentVersion = props.version;
+            const otherVersion = currentVersion === 'new' ? 'old' : 'new';
+
+            const otherFeature = this.adiffData.features.find(f =>
+                f.properties.id === props.id &&
+                f.properties.type === props.type &&
+                f.properties.version === otherVersion
+            );
+
+            if (otherFeature) {
+                let otherTags = otherFeature.properties.tags;
+                if (typeof otherTags === 'string') {
+                    try { otherTags = JSON.parse(otherTags); } catch(e) {}
+                } else if (!otherTags) {
+                    otherTags = {};
+                }
+
+                const oldTags = currentVersion === 'new' ? otherTags : tags;
+                const newTags = currentVersion === 'new' ? tags : otherTags;
+
+                tagsHtml = this.generateTagDiffHtml(oldTags, newTags);
+
+                const oldProps = currentVersion === 'new' ? otherFeature.properties : props;
+                const newProps = currentVersion === 'new' ? props : otherFeature.properties;
+                metadataHtml = this.generateMetadataDiff(oldProps, newProps);
+            } else {
+                tagsHtml = this.generateTagsTable(tags);
+                metadataHtml = this.generateMetadata(props);
+            }
+        } else {
+            tagsHtml = this.generateTagsTable(tags);
+            metadataHtml = this.generateMetadata(props);
+        }
+
+        const changeClass = this.getChangeClass(props.changeType, props.version);
+
+        const panelContent = document.getElementById('panelContent');
+        panelContent.innerHTML = `
+            <div class="popup-content">
+                <h3>${props.type}/${props.id}</h3>
+                <div class="popup-meta">
+                    <span class="change-type ${changeClass}">${props.changeType}</span>
+                    ${props.version ? `<span class="version-text">(${props.version})</span>` : ''}
+                </div>
+                ${metadataHtml}
+                ${tagsHtml ? `<div class="popup-tags">${tagsHtml}</div>` : ''}
+            </div>
+        `;
+
+        this.bottomSheetView = 'object';
+        this.bottomSheetObjectData = props;
+        this.updatePeekText();
+
+        // If sheet is in peek, expand to half
+        if (this.bottomSheetState === 'peek') {
+            this.setBottomSheetState('half');
         }
     }
 
