@@ -523,6 +523,11 @@ class ChangesetViewer {
         if (params.has('bbox_size_max')) {
             document.getElementById('bboxSizeMax').value = params.get('bbox_size_max');
         }
+
+        // Collapse filters if any are active from URL
+        if (params.has('user_name') || params.has('tags') || params.has('bbox') || params.has('bbox_size_min') || params.has('bbox_size_max')) {
+            document.querySelector('.filters').classList.add('collapsed');
+        }
     }
 
     parseTagsInput(input) {
