@@ -1135,6 +1135,13 @@ class ChangesetViewer {
             }
         });
 
+        // Remove existing adiff source/layers if present (e.g. from a prior async load)
+        if (this.map.getSource('adiff')) {
+            if (this.map.getLayer('adiff-points')) this.map.removeLayer('adiff-points');
+            if (this.map.getLayer('adiff-lines')) this.map.removeLayer('adiff-lines');
+            this.map.removeSource('adiff');
+        }
+
         // Add source
         this.map.addSource('adiff', {
             type: 'geojson',
