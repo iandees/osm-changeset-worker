@@ -1262,6 +1262,43 @@ class ChangesetViewer {
                 max_lat = centerLat + halfSize;
             }
 
+            // Add mask layer (darken outside selected changeset)
+            this.map.addSource('selected-bbox-mask', {
+                type: 'geojson',
+                data: {
+                    type: 'Feature',
+                    geometry: {
+                        type: 'Polygon',
+                        coordinates: [
+                            [ // World boundary (CCW)
+                                [-180, -90],
+                                [180, -90],
+                                [180, 90],
+                                [-180, 90],
+                                [-180, -90]
+                            ],
+                            [ // Hole (changeset bbox) - CW
+                                [min_lon, min_lat],
+                                [min_lon, max_lat],
+                                [max_lon, max_lat],
+                                [max_lon, min_lat],
+                                [min_lon, min_lat]
+                            ]
+                        ]
+                    }
+                }
+            });
+
+            this.map.addLayer({
+                id: 'selected-bbox-mask',
+                type: 'fill',
+                source: 'selected-bbox-mask',
+                paint: {
+                    'fill-color': '#000000',
+                    'fill-opacity': 0.5
+                }
+            });
+
             this.map.addSource('selected-bbox', {
                 type: 'geojson',
                 data: {
@@ -1339,7 +1376,13 @@ class ChangesetViewer {
             this.map.removeSource('adiff');
         }
 
-        // Remove bbox
+        // Remove bbox mask and outline
+        if (this.map.getLayer('selected-bbox-mask')) {
+            this.map.removeLayer('selected-bbox-mask');
+        }
+        if (this.map.getSource('selected-bbox-mask')) {
+            this.map.removeSource('selected-bbox-mask');
+        }
         if (this.map.getLayer('selected-bbox-outline')) {
             this.map.removeLayer('selected-bbox-outline');
         }
