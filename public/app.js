@@ -996,8 +996,12 @@ class ChangesetViewer {
                 ];
             }
 
+            const bottomPadding = this.isMobile()
+                ? (window.innerHeight * 0.4) + 50
+                : 50;
+
             this.map.fitBounds(bounds, {
-                padding: { top: 50, bottom: 50, left: 50, right: 50 },
+                padding: { top: 50, bottom: bottomPadding, left: 50, right: 50 },
                 maxZoom: 22,
                 duration: 250,
             });
@@ -2187,6 +2191,7 @@ class ChangesetViewer {
 
     setBottomSheetState(state) {
         const panel = document.getElementById('changesetDetailPanel');
+        const mapContainer = document.getElementById('map');
         this.bottomSheetState = state;
 
         // Remove all state classes
@@ -2194,11 +2199,13 @@ class ChangesetViewer {
 
         if (state === 'closed') {
             panel.classList.remove('active');
+            mapContainer.classList.remove('mobile-suppress-popups');
             return;
         }
 
         panel.classList.add('active');
         panel.classList.add(`sheet-${state}`);
+        mapContainer.classList.add('mobile-suppress-popups');
     }
 
     updatePeekText() {
