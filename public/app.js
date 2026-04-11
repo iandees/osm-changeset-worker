@@ -2231,7 +2231,127 @@ class ChangesetViewer {
     }
 
     setupBottomSheet() {
-        // Touch drag handling added in next task
+        const handle = document.getElementById('bottomSheetHandle');
+        const panel = document.getElementById('changesetDetailPanel');
+        if (!handle || !panel) return;
+
+        let startY = 0;
+        let startTranslateY = 0;
+        let currentTranslateY = 0;
+        let lastY = 0;
+        let lastTime = 0;
+        let velocity = 0;
+
+        const sheetHeight = () => panel.offsetHeight;
+
+        const getTranslateY = () => {
+            const state = this.bottomSheetState;
+            const h = sheetHeight();
+            if (state === 'peek') return h - 70;
+            if (state === 'half') return h - (window.innerHeight * 0.4);
+            if (state === 'full') return 0;
+            return h; // closed
+        };
+
+        const snapToNearest = (translateY, vel) => {
+            const h = sheetHeight();
+            const peekY = h - 70;
+            const halfY = h - (window.innerHeight * 0.4);
+            const fullY = 0;
+            const closedY = h;
+
+            // Fast flick detection (velocity > 0.5 px/ms)
+            if (Math.abs(vel) > 0.5) {
+                if (vel > 0) {
+                    // Flicking down
+                    if (this.bottomSheetState === 'peek') {
+                        this.closePanel();
+                        return;
+                    }
+                    if (this.bottomSheetState === 'full') {
+                        this.setBottomSheetState('half');
+                        return;
+                    }
+                    if (this.bottomSheetState === 'half') {
+                        this.setBottomSheetState('peek');
+                        return;
+                    }
+                } else {
+                    // Flicking up
+                    if (this.bottomSheetState === 'peek') {
+                        this.setBottomSheetState('half');
+                        return;
+                    }
+                    if (this.bottomSheetState === 'half') {
+                        this.setBottomSheetState('full');
+                        return;
+                    }
+                }
+            }
+
+            // Position-based snap: find closest
+            const snaps = [
+                { state: 'full', y: fullY },
+                { state: 'half', y: halfY },
+                { state: 'peek', y: peekY },
+            ];
+
+            // If dragged past 80% of peek toward closed, close it
+            if (translateY > peekY + (closedY - peekY) * 0.3) {
+                this.closePanel();
+                return;
+            }
+
+            let closest = snaps[0];
+            let closestDist = Math.abs(translateY - snaps[0].y);
+            for (const snap of snaps) {
+                const dist = Math.abs(translateY - snap.y);
+                if (dist < closestDist) {
+                    closest = snap;
+                    closestDist = dist;
+                }
+            }
+            this.setBottomSheetState(closest.state);
+        };
+
+        handle.addEventListener('touchstart', (e) => {
+            if (!this.isMobile()) return;
+            const touch = e.touches[0];
+            startY = touch.clientY;
+            startTranslateY = getTranslateY();
+            currentTranslateY = startTranslateY;
+            lastY = startY;
+            lastTime = Date.now();
+            velocity = 0;
+
+            panel.classList.add('dragging');
+        }, { passive: true });
+
+        handle.addEventListener('touchmove', (e) => {
+            if (!this.isMobile()) return;
+            const touch = e.touches[0];
+            const deltaY = touch.clientY - startY;
+            currentTranslateY = Math.max(0, startTranslateY + deltaY);
+
+            // Track velocity
+            const now = Date.now();
+            const dt = now - lastTime;
+            if (dt > 0) {
+                velocity = (touch.clientY - lastY) / dt;
+                lastY = touch.clientY;
+                lastTime = now;
+            }
+
+            panel.style.transform = `translateY(${currentTranslateY}px)`;
+            e.preventDefault();
+        }, { passive: false });
+
+        handle.addEventListener('touchend', () => {
+            if (!this.isMobile()) return;
+            panel.classList.remove('dragging');
+            panel.style.transform = '';
+            snapToNearest(currentTranslateY, velocity);
+        });
     }
 
     // Filter UI Methods
