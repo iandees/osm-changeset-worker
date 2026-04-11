@@ -632,6 +632,15 @@ input::placeholder {
     display: flex;
 }
 
+/* Hide bottom sheet elements on desktop */
+.bottom-sheet-handle {
+    display: none;
+}
+
+.bottom-sheet-peek {
+    display: none;
+}
+
 .panel-close-btn {
     position: absolute;
     top: 0.25rem;
@@ -651,7 +660,7 @@ input::placeholder {
     border-radius: 4px;
 }
 
-#panelContent {
+.bottom-sheet-content {
     height: 100%;
     display: flex;
     flex-direction: column;
@@ -897,28 +906,121 @@ input::placeholder {
         background: #f1f5f9;
     }
 
+    /* Bottom sheet */
     .changeset-detail-panel {
         position: fixed;
         top: auto;
-        bottom: 0;
         left: 0;
         right: 0;
         width: 100%;
-        max-height: 55vh;
         border-radius: 12px 12px 0 0;
         z-index: 90;
+        border: none;
+        border-top: 1px solid #cbd5e1;
+        box-shadow: 0 -4px 20px rgba(0, 0, 0, 0.15);
+        transition: transform 0.3s ease;
+        max-height: none;
     }
 
-    .map-controls {
-        top: 0.75rem;
-        right: 0.75rem;
+    .changeset-detail-panel.active {
+        display: flex;
     }
 
-    .maplibregl-popup {
-        max-width: 280px !important;
+    .changeset-detail-panel.active {
+        bottom: 0;
     }
 
-    .popup-content {
-        min-width: auto;
+    /* Sheet states via transform */
+    .changeset-detail-panel.sheet-peek {
+        height: 85vh;
+        transform: translateY(calc(85vh - 70px));
+    }
+
+    .changeset-detail-panel.sheet-half {
+        height: 85vh;
+        transform: translateY(calc(85vh - 40vh));
+    }
+
+    .changeset-detail-panel.sheet-full {
+        height: 85vh;
+        transform: translateY(0);
+    }
+
+    .changeset-detail-panel.dragging {
+        transition: none;
+    }
+
+    /* Drag handle */
+    .bottom-sheet-handle {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        padding: 10px 0 6px 0;
+        cursor: grab;
+        touch-action: none;
+        flex-shrink: 0;
+    }
+
+    .bottom-sheet-handle-bar {
+        width: 40px;
+        height: 4px;
+        border-radius: 2px;
+        background: #cbd5e1;
+    }
+
+    /* Peek summary row */
+    .bottom-sheet-peek {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding: 0 12px 8px 12px;
+        flex-shrink: 0;
+    }
+
+    .bottom-sheet-peek-text {
+        font-size: 0.85rem;
+        font-weight: 600;
+        color: #0f172a;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        flex: 1;
+        min-width: 0;
+    }
+
+    .bottom-sheet-peek .panel-close-btn {
+        position: static;
+        flex-shrink: 0;
+        margin-left: 8px;
+    }
+
+    /* Back button for object detail */
+    .bottom-sheet-back-btn {
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+        background: none;
+        border: none;
+        color: #2563eb;
+        font-size: 0.85rem;
+        font-weight: 600;
+        cursor: pointer;
+        padding: 0;
+    }
+
+    .bottom-sheet-back-btn:active {
+        color: #1d4ed8;
+    }
+
+    /* Content area */
+    .bottom-sheet-content {
+        overflow-y: auto;
+        flex: 1;
+        min-height: 0;
+    }
+
+    /* Suppress MapLibre popups on mobile when sheet is active */
+    .mobile-suppress-popups .maplibregl-popup {
+        display: none !important;
     }
 }
