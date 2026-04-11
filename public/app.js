@@ -23,6 +23,7 @@ class ChangesetViewer {
         this.loadReadStatus();
         this.initMap();
         this.initEventListeners();
+        this.setupMobileSidebar();
         this.loadFiltersFromUrl();
         await this.loadChangesets('initial');
         this.updateFilterSummary();
@@ -71,10 +72,12 @@ class ChangesetViewer {
         document.getElementById('applyFilters').addEventListener('click', () => {
             console.log('Apply Filters clicked');
             this.loadChangesets(); // Reload data with new filters
+            this.closeMobileSidebar();
         });
 
         document.getElementById('clearFilters').addEventListener('click', () => {
             this.clearFilters();
+            this.closeMobileSidebar();
         });
 
         // Map controls
@@ -89,10 +92,12 @@ class ChangesetViewer {
         // Bounding box controls
         document.getElementById('drawBbox').addEventListener('click', () => {
             this.toggleBboxDrawing();
+            this.closeMobileSidebar();
         });
 
         document.getElementById('useMapBounds').addEventListener('click', () => {
             this.setBboxFromMap();
+            this.closeMobileSidebar();
         });
 
         document.getElementById('clearBbox').addEventListener('click', () => {
@@ -904,6 +909,8 @@ class ChangesetViewer {
     }
 
     async selectChangeset(changeset) {
+        this.closeMobileSidebar();
+
         // Update URL to permalink
         const params = new URLSearchParams(window.location.search);
         const newUrl = `/changeset/${changeset.id}?${params.toString()}`;
@@ -2121,6 +2128,31 @@ class ChangesetViewer {
         this.updateFilterSummary();
 
         console.log('Bbox filter cleared');
+    }
+
+    // Mobile sidebar
+    setupMobileSidebar() {
+        const backdrop = document.createElement('div');
+        backdrop.className = 'sidebar-backdrop';
+        document.body.appendChild(backdrop);
+
+        const sidebar = document.querySelector('.sidebar');
+        const toggleBtn = document.getElementById('sidebarToggle');
+
+        toggleBtn.addEventListener('click', () => {
+            sidebar.classList.toggle('open');
+            backdrop.classList.toggle('active');
+        });
+
+        backdrop.addEventListener('click', () => {
+            this.closeMobileSidebar();
+        });
+    }
+
+    closeMobileSidebar() {
+        if (window.innerWidth >= 768) return;
+        document.querySelector('.sidebar').classList.remove('open');
+        document.querySelector('.sidebar-backdrop').classList.remove('active');
     }
 
     // Filter UI Methods
