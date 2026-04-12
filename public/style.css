@@ -618,7 +618,7 @@ input::placeholder {
     bottom: 1rem;
     left: 1rem;
     width: 400px;
-    max-height: 60vh;
+    height: 30vh;
     background: white;
     box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
     border-radius: 8px;
@@ -660,8 +660,32 @@ input::placeholder {
     border-radius: 4px;
 }
 
+.object-detail-section {
+    border-bottom: 1px solid #cbd5e1;
+    padding: 0.5rem;
+}
+
+.object-detail-back {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.125rem;
+    font-size: 0.8rem;
+    color: #2563eb;
+    background: none;
+    border: none;
+    cursor: pointer;
+    padding: 0;
+    margin-bottom: 0.25rem;
+}
+
+.object-detail-back:hover {
+    color: #1d4ed8;
+    text-decoration: underline;
+}
+
 .bottom-sheet-content {
-    height: 100%;
+    flex: 1;
+    min-height: 0;
     display: flex;
     flex-direction: column;
     overflow-y: auto;
@@ -986,12 +1010,14 @@ input::placeholder {
         text-overflow: ellipsis;
         flex: 1;
         min-width: 0;
+        padding-right: 2rem;
     }
 
-    .bottom-sheet-peek .panel-close-btn {
-        position: static;
-        flex-shrink: 0;
-        margin-left: 8px;
+    .panel-close-btn {
+        position: absolute;
+        right: 12px;
+        /* Align with peek row: handle is ~20px, peek padding-bottom 8px */
+        top: 26px;
     }
 
     /* Back button for object detail */
@@ -1010,6 +1036,11 @@ input::placeholder {
 
     .bottom-sheet-back-btn:active {
         color: #1d4ed8;
+    }
+
+    /* Hide desktop object detail on mobile (uses sheet drill-down instead) */
+    .object-detail-section {
+        display: none !important;
     }
 
     /* Content area */

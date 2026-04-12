@@ -1238,6 +1238,17 @@ class ChangesetViewer {
         this.map.on('click', 'adiff-lines', this._boundOnAdiffClick);
         this.map.on('click', 'adiff-points', this._boundOnAdiffClick);
 
+        // Click on empty map area dismisses object detail
+        this._boundOnMapClickDismiss = (e) => {
+            const features = this.map.queryRenderedFeatures(e.point, {
+                layers: ['adiff-lines', 'adiff-points']
+            });
+            if (features.length === 0) {
+                this.clearObjectDetail();
+            }
+        };
+        this.map.on('click', this._boundOnMapClickDismiss);
+
         // Cursor handling
         this.map.on('mouseenter', 'adiff-lines', () => this.map.getCanvas().style.cursor = 'pointer');
         this.map.on('mouseleave', 'adiff-lines', () => this.map.getCanvas().style.cursor = '');
@@ -1358,6 +1369,13 @@ class ChangesetViewer {
             this._boundOnAdiffClick = null;
         }
 
+        if (this._boundOnMapClickDismiss) {
+            this.map.off('click', this._boundOnMapClickDismiss);
+            this._boundOnMapClickDismiss = null;
+        }
+
+        this.clearObjectDetail();
+
         // Reset feature state - only reset adiffLoaded, preserve selected state
         if (this.selectedChangeset && this.map.getSource('changesets')) {
             this.map.setFeatureState(
@@ -1458,21 +1476,7 @@ class ChangesetViewer {
             </div>
         `;
 
-        if (this.isMobile()) {
-            this.showObjectInSheet(feature, e.lngLat);
-            return;
-        }
-
-        // Remove existing popup if present
-        if (this.adiffPopup) {
-            try { this.adiffPopup.remove(); } catch (e) { /* ignore */ }
-            this.adiffPopup = null;
-        }
-
-        this.adiffPopup = new maplibregl.Popup()
-            .setLngLat(e.lngLat)
-            .setHTML(content)
-            .addTo(this.map);
+        this.showObjectInPanel(content, props);
     }
 
     generateTagsTable(tags) {
@@ -1593,6 +1597,8 @@ class ChangesetViewer {
     }
 
     showChangesetDetails(changeset) {
+        this.clearObjectDetail();
+
         const status = changeset.open ? 'Open' : 'Closed';
         const statusClass = changeset.open ? 'status-open' : 'status-closed';
 
@@ -1737,6 +1743,7 @@ class ChangesetViewer {
         if (this.isMobile()) {
             this.setBottomSheetState('closed');
         } else {
+            this.clearObjectDetail();
             document.getElementById('changesetDetailPanel').classList.remove('active');
         }
 
@@ -2292,79 +2299,40 @@ class ChangesetViewer {
         }
     }
 
-    showObjectInSheet(feature, lngLat) {
-        const props = feature.properties;
+    showObjectInPanel(content, props) {
+        const panelContent = document.getElementById('panelContent');
 
-        let tags = {};
-        if (props.tags) {
-            if (typeof props.tags === 'string') {
-                try { tags = JSON.parse(props.tags); } catch(e) {}
-            } else {
-                tags = props.tags;
-            }
-        }
-
-        let tagsHtml = '';
-        let metadataHtml = '';
-
-        if (props.changeType === 'modify' && this.adiffData) {
-            const currentVersion = props.version;
-            const otherVersion = currentVersion === 'new' ? 'old' : 'new';
-
-            const otherFeature = this.adiffData.features.find(f =>
-                f.properties.id === props.id &&
-                f.properties.type === props.type &&
-                f.properties.version === otherVersion
-            );
-
-            if (otherFeature) {
-                let otherTags = otherFeature.properties.tags;
-                if (typeof otherTags === 'string') {
-                    try { otherTags = JSON.parse(otherTags); } catch(e) {}
-                } else if (!otherTags) {
-                    otherTags = {};
-                }
-
-                const oldTags = currentVersion === 'new' ? otherTags : tags;
-                const newTags = currentVersion === 'new' ? tags : otherTags;
-
-                tagsHtml = this.generateTagDiffHtml(oldTags, newTags);
-
-                const oldProps = currentVersion === 'new' ? otherFeature.properties : props;
-                const newProps = currentVersion === 'new' ? props : otherFeature.properties;
-                metadataHtml = this.generateMetadataDiff(oldProps, newProps);
-            } else {
-                tagsHtml = this.generateTagsTable(tags);
-                metadataHtml = this.generateMetadata(props);
+        if (this.isMobile()) {
+            panelContent.innerHTML = content;
+            this.bottomSheetView = 'object';
+            this.bottomSheetObjectData = props;
+            this.updatePeekText();
+            if (this.bottomSheetState === 'peek') {
+                this.setBottomSheetState('half');
             }
         } else {
-            tagsHtml = this.generateTagsTable(tags);
-            metadataHtml = this.generateMetadata(props);
+            this.clearObjectDetail();
+            const section = document.createElement('div');
+            section.className = 'object-detail-section';
+            const changesetId = this.selectedChangeset ? this.selectedChangeset.id : '';
+            section.innerHTML = `
+                <button class="object-detail-back" id="objectDetailBack">
+                    <i class="ph ph-caret-left"></i> Changeset #${changesetId}
+                </button>
+                ${content}
+            `;
+            panelContent.insertBefore(section, panelContent.firstChild);
+            panelContent.scrollTop = 0;
+
+            document.getElementById('objectDetailBack').addEventListener('click', () => {
+                this.clearObjectDetail();
+            });
         }
+    }
 
-        const changeClass = this.getChangeClass(props.changeType, props.version);
-
-        const panelContent = document.getElementById('panelContent');
-        panelContent.innerHTML = `
-            <div class="popup-content">
-                <h3>${props.type}/${props.id}</h3>
-                <div class="popup-meta">
-                    <span class="change-type ${changeClass}">${props.changeType}</span>
-                    ${props.version ? `<span class="version-text">(${props.version})</span>` : ''}
-                </div>
-                ${metadataHtml}
-                ${tagsHtml ? `<div class="popup-tags">${tagsHtml}</div>` : ''}
-            </div>
-        `;
-
-        this.bottomSheetView = 'object';
-        this.bottomSheetObjectData = props;
-        this.updatePeekText();
-
-        // If sheet is in peek, expand to half
-        if (this.bottomSheetState === 'peek') {
-            this.setBottomSheetState('half');
-        }
+    clearObjectDetail() {
+        const existing = document.querySelector('.object-detail-section');
+        if (existing) existing.remove();
     }
 
     setupBottomSheet() {
